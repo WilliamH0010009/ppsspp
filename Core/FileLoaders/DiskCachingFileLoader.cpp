@@ -30,7 +30,7 @@
 #include "Core/FileLoaders/DiskCachingFileLoader.h"
 #include "Core/System.h"
 
-#if PPSSPP_PLATFORM(SWITCH)
+#if PPSSPP_PLATFORM(SWITCH) || PPSSPP_PLATFORM(VITA)
 // Far from optimal, but I guess it works...
 #define fseeko fseek
 #endif

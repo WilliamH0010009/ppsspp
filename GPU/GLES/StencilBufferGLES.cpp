@@ -26,43 +26,26 @@
 #include "GPU/GLES/TextureCacheGLES.h"
 
 static const char *stencil_fs = R"(
-#ifdef GL_ES
-#ifdef GL_FRAGMENT_PRECISION_HIGH
-precision highp float;
-#else
-precision mediump float;  // just hope it's enough..
-#endif
-#endif
-#if __VERSION__ >= 130
-#define varying in
-#define texture2D texture
-#define gl_FragColor fragColor0
-out vec4 fragColor0;
-#endif
-varying vec2 v_texcoord0;
-uniform float u_stencilValue;
-uniform sampler2D tex;
 float roundAndScaleTo255f(in float x) { return floor(x * 255.99); }
-void main() {
-  vec4 index = texture2D(tex, v_texcoord0);
-  gl_FragColor = vec4(index.a);
+float4 main(
+	float2 v_texcoord0 : TEXCOORD0,
+	uniform float u_stencilValue,
+	uniform sampler2D tex
+) {
+  float4 index = tex2D(tex, v_texcoord0);
   float shifted = roundAndScaleTo255f(index.a) / roundAndScaleTo255f(u_stencilValue);
-  if (mod(floor(shifted), 2.0) < 0.99) discard;
+  if (fmod(floor(shifted), 2.0) < 0.99) discard;
+  return float4(index.a);
 }
 )";
 
 static const char *stencil_vs = R"(
-#ifdef GL_ES
-precision highp float;
-#endif
-#if __VERSION__ >= 130
-#define attribute in
-#define varying out
-#endif
-attribute vec4 a_position;
-attribute vec2 a_texcoord0;
-varying vec2 v_texcoord0;
-void main() {
+void main(
+	float4 a_position,
+	float2 a_texcoord0,
+	float4 out gl_Position : POSITION,
+	float2 out v_texcoord0 : TEXCOORD0
+) {
   v_texcoord0 = a_texcoord0;
   gl_Position = a_position;
 }

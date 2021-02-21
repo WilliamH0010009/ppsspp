@@ -1,6 +1,16 @@
 # vim:noexpandtab:
 cmake_minimum_required(VERSION 3.6)
+
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+  if(DEFINED ENV{VITASDK})
+    set(CMAKE_TOOLCHAIN_FILE "$ENV{VITASDK}/share/vita.toolchain.cmake" CACHE PATH "toolchain file")
+  else()
+    message(FATAL_ERROR "Please define VITASDK to point to your SDK path!")
+  endif()
+endif()
+
 project(PPSSPP)
+include("${VITASDK}/share/vita.cmake" REQUIRED)
 
 #This is supposed to work but doesn't!
 if(NOT ANDROID)
@@ -156,6 +166,18 @@ if(ANDROID)
 	set(USING_GLES2 ON)
 endif()
 
+if(VITA)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -std=gnu++11")
+	add_compile_options(-Wl,-q -O2 -ftree-vectorize -fno-short-enums -D_NDEBUG)
+	add_compile_options(-mtune=cortex-a9 -march=armv7-a -mfpu=neon -mfloat-abi=hard)
+	add_definitions(-DVITA -D__VITA__)
+	add_definitions(-D_PSP2_NET_NET_H_)
+	set(USING_EGL ON)
+	set(USING_GLES2 ON)
+	set(WIIU ON) # avoid pthread error in armips
+	set(USE_DISCORD OFF)
+endif()
+
 if(ANDROID AND NOT LIBRETRO)
 	set(CoreLibName ppsspp_jni)
 	set(CoreLinkType SHARED)
@@ -170,15 +192,15 @@ include_directories(ext/native)
 include_directories(ext/glslang)
 
 
-if(NOT OPENGL_LIBRARIES AND USING_GLES2)
+if(NOT OPENGL_LIBRARIES AND USING_GLES2 AND NOT VITA)
 	set(OPENGL_LIBRARIES GLESv2 EGL)
 endif()
 
-if(NOT OPENGL_LIBRARIES)
+if(NOT OPENGL_LIBRARIES AND NOT VITA)
 	find_package(OpenGL REQUIRED)
 endif()
 
-if(USING_EGL)
+if(USING_EGL AND NOT VITA)
 	if(NOT EGL_LIBRARIES)
 		set(EGL_LIBRARIES EGL)
 	endif()
@@ -271,8 +293,10 @@ if(NOT MSVC)
 
 	# Disable some warnings
 	add_definitions(-Wno-multichar)
-	add_definitions(-Wno-deprecated-register)
-	add_definitions(-Wno-tautological-pointer-compare)
+	if(NOT VITA)
+		add_definitions(-Wno-deprecated-register)
+		add_definitions(-Wno-tautological-pointer-compare)
+	endif()
 
 	# Don't compile with strict aliasing, we're not 100% aliasing-safe
 	add_compile_options(-fno-strict-aliasing)
@@ -395,6 +419,7 @@ set(CommonWindows
 )
 source_group(Windows FILES ${CommonWindows})
 
+if(NOT VITA)
 set(CommonVulkan ${CommonExtra}
 	Common/Vulkan/VulkanDebug.cpp
 	Common/Vulkan/VulkanDebug.h
@@ -407,6 +432,7 @@ set(CommonVulkan ${CommonExtra}
 	Common/Vulkan/VulkanMemory.cpp
 	Common/Vulkan/VulkanMemory.h
 )
+endif()
 
 add_library(Common STATIC
 	${CommonX86}
@@ -527,6 +553,8 @@ if(USE_FFMPEG)
 				elseif(X86)
 					set(PLATFORM_ARCH "Windows/x86")
 				endif()
+			elseif(VITA)
+			set(PLATFORM_ARCH "vita")
 			endif()
 			if(PLATFORM_ARCH)
 				set(FFMPEG_DIR "ffmpeg/${PLATFORM_ARCH}")
@@ -833,7 +861,7 @@ elseif(TARGET SDL2::SDL2)
 	if(APPLE)
 		set(nativeExtra ${nativeExtra} SDL/SDLMain.h SDL/SDLMain.mm SDL/SDLCocoaMetalLayer.h SDL/SDLCocoaMetalLayer.mm)
 		set(nativeExtraLibs ${nativeExtraLibs} ${COCOA_LIBRARY} ${QUARTZ_CORE_LIBRARY})
-	elseif(USING_EGL)
+	elseif(USING_EGL AND NOT VITA)
 		set(nativeExtraLibs ${nativeExtraLibs} pthread)
 	endif()
 	set(TargetBin PPSSPPSDL)
@@ -897,6 +925,7 @@ set(THIN3D_PLATFORMS ext/native/thin3d/thin3d_gl.cpp
 	ext/native/thin3d/DataFormatGL.h
 )
 
+if(NOT VITA)
 set(THIN3D_PLATFORMS ${THIN3D_PLATFORMS}
 	ext/native/thin3d/thin3d_vulkan.cpp
 	ext/native/thin3d/VulkanRenderManager.cpp
@@ -905,6 +934,7 @@ set(THIN3D_PLATFORMS ${THIN3D_PLATFORMS}
 	ext/native/thin3d/VulkanQueueRunner.h
 	ext/native/thin3d/DataFormat.h
 )
+endif()
 
 if(WIN32)
 	set(THIN3D_PLATFORMS ${THIN3D_PLATFORMS}
@@ -1258,6 +1288,7 @@ set(GPU_GLES
 	GPU/GLES/VertexShaderGeneratorGLES.h
 )
 
+if(NOT VITA)
 set(GPU_VULKAN
 	GPU/Vulkan/DepalettizeShaderVulkan.cpp
 	GPU/Vulkan/DepalettizeShaderVulkan.h
@@ -1287,6 +1318,7 @@ set(GPU_VULKAN
 	GPU/Vulkan/VulkanUtil.cpp
 	GPU/Vulkan/VulkanUtil.h
 )
+endif()
 
 set(GPU_D3D9
 	GPU/Directx9/DepalettizeShaderDX9.cpp
@@ -1789,11 +1821,16 @@ set(CoreExtraLibs ${CoreExtraLibs} armips)
 #	target_link_libraries(native X11-xcb X11)
 #endif()
 
-
+if(NOT VITA)
 set(GlslangLibs glslang OGLCompiler OSDependent SPIRV SPVRemapper spirv-cross-glsl)
+endif()
 
 if(WIN32)
 	set(GlslangLibs ${GlslangLibs} spirv-cross-hlsl)
+endif()
+
+if(VITA)
+set(CMAKE_DL_LIBS)
 endif()
 
 target_link_libraries(${CoreLibName} Common native kirk cityhash sfmt19937 xbrz xxhash ${GlslangLibs}
@@ -1991,6 +2028,31 @@ if(LIBRETRO)
 	add_subdirectory(libretro)
 endif()
 
+if(VITA)
+	set(VitaLibs
+		mp3lame
+		pib
+		vita2d
+		taihen_stub
+		kubridge_stub
+		libScePiglet_stub
+		SceShaccCg_stub
+		SceAppMgr_stub
+		SceDisplay_stub
+		SceCommonDialog_stub
+		SceLibKernel_stub
+		SceMotion_stub
+		SceSysmodule_stub
+		SceGxm_stub
+		ScePower_stub
+		SceCtrl_stub
+		SceHid_stub
+		SceAudio_stub
+		SceTouch_stub
+		-Wl,--whole-archive,--no-enum-size-warning pthread -Wl,--no-whole-archive
+	)
+endif()
+
 if(TargetBin)
 	if(IOS OR APPLE)
 		if(APPLE AND NOT IOS)
@@ -2035,7 +2097,7 @@ if(TargetBin)
 	else()
 		add_executable(${TargetBin} ${NativeAppSource})
 	endif()
-	target_link_libraries(${TargetBin} ${LinkCommon} Common)
+	target_link_libraries(${TargetBin} ${VitaLibs} ${LinkCommon} Common)
 endif()
 
 # installs
@@ -2080,5 +2142,18 @@ if(IOS)
 		XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES
 		XCODE_ATTRIBUTE_ENABLE_BITCODE NO
 		XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "-"
+	)
+endif()
+
+if(VITA)
+	vita_create_self(eboot.bin ${TargetBin} UNSAFE)
+	set(VITA_MKSFOEX_FLAGS "-d ATTRIBUTE2=12")
+	vita_create_vpk(ppsspp.vpk "PPSSPP000" eboot.bin
+		VERSION ${VITA_VERSION}
+		NAME "PPSSPP"
+		FILE sce_sys/icon0.png sce_sys/icon0.png
+			sce_sys/livearea/contents/bg.png sce_sys/livearea/contents/bg.png
+			sce_sys/livearea/contents/startup.png sce_sys/livearea/contents/startup.png
+			sce_sys/livearea/contents/template.xml sce_sys/livearea/contents/template.xml
 	)
 endif()

@@ -43,107 +43,14 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 	// In GLSL ES 3.0, you use "in" variables instead of varying.
 
 	bool glslES30 = false;
-	const char *varying = "varying";
 	const char *fragColor0 = "gl_FragColor";
 	const char *fragColor1 = "fragColor1";
-	const char *texture = "texture2D";
+	const char *texture = "tex2D";
 	const char *texelFetch = NULL;
-	bool highpFog = false;
-	bool highpTexcoord = false;
 	bool bitwiseOps = false;
 	const char *lastFragData = nullptr;
 
 	ReplaceAlphaType stencilToAlpha = static_cast<ReplaceAlphaType>(id.Bits(FS_BIT_STENCIL_TO_ALPHA, 2));
-
-	if (gl_extensions.IsGLES) {
-		// ES doesn't support dual source alpha :(
-		if (gstate_c.Supports(GPU_SUPPORTS_GLSL_ES_300)) {
-			WRITE(p, "#version 300 es\n");  // GLSL ES 3.0
-			fragColor0 = "fragColor0";
-			texture = "texture";
-			glslES30 = true;
-			bitwiseOps = true;
-			texelFetch = "texelFetch";
-
-			if (stencilToAlpha == REPLACE_ALPHA_DUALSOURCE && gl_extensions.EXT_blend_func_extended) {
-				WRITE(p, "#extension GL_EXT_blend_func_extended : require\n");
-			}
-		} else {
-			WRITE(p, "#version 100\n");  // GLSL ES 1.0
-			if (gl_extensions.EXT_gpu_shader4) {
-				WRITE(p, "#extension GL_EXT_gpu_shader4 : enable\n");
-				bitwiseOps = true;
-				texelFetch = "texelFetch2D";
-			}
-			if (gl_extensions.EXT_blend_func_extended) {
-				// Oldy moldy GLES, so use the fixed output name.
-				fragColor1 = "gl_SecondaryFragColorEXT";
-
-				if (stencilToAlpha == REPLACE_ALPHA_DUALSOURCE && gl_extensions.EXT_blend_func_extended) {
-					WRITE(p, "#extension GL_EXT_blend_func_extended : require\n");
-				}
-			}
-		}
-
-		// PowerVR needs highp to do the fog in MHU correctly.
-		// Others don't, and some can't handle highp in the fragment shader.
-		highpFog = (gl_extensions.bugs & BUG_PVR_SHADER_PRECISION_BAD) ? true : false;
-		highpTexcoord = highpFog;
-
-		if (gstate_c.Supports(GPU_SUPPORTS_ANY_FRAMEBUFFER_FETCH)) {
-			if (gstate_c.Supports(GPU_SUPPORTS_GLSL_ES_300) && gl_extensions.EXT_shader_framebuffer_fetch) {
-				WRITE(p, "#extension GL_EXT_shader_framebuffer_fetch : require\n");
-				lastFragData = "fragColor0";
-			} else if (gl_extensions.EXT_shader_framebuffer_fetch) {
-				WRITE(p, "#extension GL_EXT_shader_framebuffer_fetch : require\n");
-				lastFragData = "gl_LastFragData[0]";
-			} else if (gl_extensions.NV_shader_framebuffer_fetch) {
-				// GL_NV_shader_framebuffer_fetch is available on mobile platform and ES 2.0 only but not on desktop.
-				WRITE(p, "#extension GL_NV_shader_framebuffer_fetch : require\n");
-				lastFragData = "gl_LastFragData[0]";
-			} else if (gl_extensions.ARM_shader_framebuffer_fetch) {
-				WRITE(p, "#extension GL_ARM_shader_framebuffer_fetch : require\n");
-				lastFragData = "gl_LastFragColorARM";
-			}
-		}
-
-		WRITE(p, "precision lowp float;\n");
-	} else {
-		if (!gl_extensions.ForceGL2 || gl_extensions.IsCoreContext) {
-			if (gl_extensions.VersionGEThan(3, 3, 0)) {
-				fragColor0 = "fragColor0";
-				texture = "texture";
-				glslES30 = true;
-				bitwiseOps = true;
-				texelFetch = "texelFetch";
-				WRITE(p, "#version 330\n");
-			} else if (gl_extensions.VersionGEThan(3, 0, 0)) {
-				fragColor0 = "fragColor0";
-				bitwiseOps = true;
-				texelFetch = "texelFetch";
-				WRITE(p, "#version 130\n");
-				if (gl_extensions.EXT_gpu_shader4) {
-					WRITE(p, "#extension GL_EXT_gpu_shader4 : enable\n");
-				}
-			} else {
-				WRITE(p, "#version 110\n");
-				if (gl_extensions.EXT_gpu_shader4) {
-					WRITE(p, "#extension GL_EXT_gpu_shader4 : enable\n");
-					bitwiseOps = true;
-					texelFetch = "texelFetch2D";
-				}
-			}
-		}
-
-		// We remove these everywhere - GL4, GL3, Mac-forced-GL2, etc.
-		WRITE(p, "#define lowp\n");
-		WRITE(p, "#define mediump\n");
-		WRITE(p, "#define highp\n");
-	}
-
-	if (glslES30 || gl_extensions.IsCoreContext) {
-		varying = "in";
-	}
 
 	bool lmode = id.Bit(FS_BIT_LMODE);
 	bool doTexture = id.Bit(FS_BIT_DO_TEXTURE);
@@ -175,80 +82,75 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 
 	bool isModeClear = id.Bit(FS_BIT_CLEARMODE);
 
-	if (shaderDepal && gl_extensions.IsGLES) {
-		WRITE(p, "precision highp int;\n");
-	}
-
-	const char *shading = "";
-	if (glslES30)
-		shading = doFlatShading ? "flat" : "";
+	WRITE(p, "float4 main(\n");
 
 	if (doTexture)
-		WRITE(p, "uniform sampler2D tex;\n");
+		WRITE(p, "  uniform sampler2D tex,\n");
 
 	if (!isModeClear && replaceBlend > REPLACE_BLEND_STANDARD) {
 		*uniformMask |= DIRTY_SHADERBLEND;
 		if (!gstate_c.Supports(GPU_SUPPORTS_ANY_FRAMEBUFFER_FETCH) && replaceBlend == REPLACE_BLEND_COPY_FBO) {
 			if (!texelFetch) {
-				WRITE(p, "uniform vec2 u_fbotexSize;\n");
+				WRITE(p, "  uniform float2 u_fbotexSize,\n");
 			}
-			WRITE(p, "uniform sampler2D fbotex;\n");
+			WRITE(p, "  uniform sampler2D fbotex,\n");
 		}
 		if (replaceBlendFuncA >= GE_SRCBLEND_FIXA) {
-			WRITE(p, "uniform vec3 u_blendFixA;\n");
+			WRITE(p, "  uniform float3 u_blendFixA,\n");
 		}
 		if (replaceBlendFuncB >= GE_DSTBLEND_FIXB) {
-			WRITE(p, "uniform vec3 u_blendFixB;\n");
+			WRITE(p, "  uniform float3 u_blendFixB,\n");
 		}
 	}
 
 	if (needShaderTexClamp && doTexture) {
 		*uniformMask |= DIRTY_TEXCLAMP;
-		WRITE(p, "uniform vec4 u_texclamp;\n");
+		WRITE(p, "  uniform float4 u_texclamp,\n");
 		if (id.Bit(FS_BIT_TEXTURE_AT_OFFSET)) {
-			WRITE(p, "uniform vec2 u_texclampoff;\n");
+			WRITE(p, "  uniform float2 u_texclampoff,\n");
 		}
 	}
 
 	if (enableAlphaTest || enableColorTest) {
 		if (g_Config.bFragmentTestCache) {
-			WRITE(p, "uniform sampler2D testtex;\n");
+			WRITE(p, "  uniform sampler2D testtex,\n");
 		} else {
 			*uniformMask |= DIRTY_ALPHACOLORREF;
-			WRITE(p, "uniform vec4 u_alphacolorref;\n");
+			WRITE(p, "  uniform float4 u_alphacolorref,\n");
 			if (bitwiseOps && ((enableColorTest && !colorTestAgainstZero) || (enableAlphaTest && !alphaTestAgainstZero))) {
 				*uniformMask |= DIRTY_ALPHACOLORMASK;
-				WRITE(p, "uniform ivec4 u_alphacolormask;\n");
+				WRITE(p, "  uniform ivec4 u_alphacolormask,\n");
 			}
 		}
 	}
 
 	if (shaderDepal) {
-		WRITE(p, "uniform sampler2D pal;\n");
-		WRITE(p, "uniform int u_depal;\n");
+		WRITE(p, "  uniform sampler2D pal,\n");
+		WRITE(p, "  uniform int u_depal,\n");
 		*uniformMask |= DIRTY_DEPAL;
 	}
 
 	StencilValueType replaceAlphaWithStencilType = (StencilValueType)id.Bits(FS_BIT_REPLACE_ALPHA_WITH_STENCIL_TYPE, 4);
 	if (stencilToAlpha && replaceAlphaWithStencilType == STENCIL_VALUE_UNIFORM) {
 		*uniformMask |= DIRTY_STENCILREPLACEVALUE;
-		WRITE(p, "uniform float u_stencilReplaceValue;\n");
+		WRITE(p, "  uniform float u_stencilReplaceValue,\n");
 	}
 	if (doTexture && texFunc == GE_TEXFUNC_BLEND) {
 		*uniformMask |= DIRTY_TEXENV;
-		WRITE(p, "uniform vec3 u_texenv;\n");
+		WRITE(p, "  uniform float3 u_texenv,\n");
 	}
 
-	WRITE(p, "%s %s vec4 v_color0;\n", shading, varying);
+	// Moved it down
+	// WRITE(p, "  float4 v_color0 : COLOR0,\n");
 	if (lmode)
-		WRITE(p, "%s %s vec3 v_color1;\n", shading, varying);
+		WRITE(p, "  float3 v_color1 : COLOR1,\n");
 	if (enableFog) {
 		*uniformMask |= DIRTY_FOGCOLOR;
-		WRITE(p, "uniform vec3 u_fogcolor;\n");
-		WRITE(p, "%s %s float v_fogdepth;\n", varying, highpFog ? "highp" : "mediump");
+		WRITE(p, "  uniform float3 u_fogcolor,\n");
+		WRITE(p, "  float v_fogdepth : TEXCOORD1,\n");
 	}
 	if (doTexture) {
-		WRITE(p, "%s %s vec3 v_texcoord;\n", varying, highpTexcoord ? "highp" : "mediump");
+		WRITE(p, "  float3 v_texcoord : TEXCOORD0,\n");
 	}
 
 	if (!g_Config.bFragmentTestCache) {
@@ -256,33 +158,19 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 			if (bitwiseOps) {
 				WRITE(p, "int roundAndScaleTo255i(in float x) { return int(floor(x * 255.0 + 0.5)); }\n");
 			} else if (gl_extensions.gpuVendor == GPU_VENDOR_IMGTEC) {
-				WRITE(p, "float roundTo255thf(in mediump float x) { mediump float y = x + (0.5/255.0); return y - fract(y * 255.0) * (1.0 / 255.0); }\n");
+				WRITE(p, "float roundTo255thf(in float x) { float y = x + (0.5/255.0); return y - fract(y * 255.0) * (1.0 / 255.0); }\n");
 			} else {
 				WRITE(p, "float roundAndScaleTo255f(in float x) { return floor(x * 255.0 + 0.5); }\n");
 			}
 		}
 		if (enableColorTest && !colorTestAgainstZero) {
 			if (bitwiseOps) {
-				WRITE(p, "ivec3 roundAndScaleTo255iv(in vec3 x) { return ivec3(floor(x * 255.0 + 0.5)); }\n");
+				WRITE(p, "ivec3 roundAndScaleTo255iv(in float3 x) { return ivec3(floor(x * 255.0 + 0.5)); }\n");
 			} else if (gl_extensions.gpuVendor == GPU_VENDOR_IMGTEC) {
-				WRITE(p, "vec3 roundTo255thv(in vec3 x) { vec3 y = x + (0.5/255.0); return y - fract(y * 255.0) * (1.0 / 255.0); }\n");
+				WRITE(p, "float3 roundTo255thv(in float3 x) { float3 y = x + (0.5/255.0); return y - fract(y * 255.0) * (1.0 / 255.0); }\n");
 			} else {
-				WRITE(p, "vec3 roundAndScaleTo255v(in vec3 x) { return floor(x * 255.0 + 0.5); }\n");
+				WRITE(p, "float3 roundAndScaleTo255v(in float3 x) { return floor(x * 255.0 + 0.5); }\n");
 			}
-		}
-	}
-
-	if (!strcmp(fragColor0, "fragColor0")) {
-		const char *qualifierColor0 = "out";
-		if (lastFragData && !strcmp(lastFragData, fragColor0)) {
-			qualifierColor0 = "inout";
-		}
-		// Output the output color definitions.
-		if (stencilToAlpha == REPLACE_ALPHA_DUALSOURCE) {
-			WRITE(p, "%s vec4 fragColor0;\n", qualifierColor0);
-			WRITE(p, "out vec4 fragColor1;\n");
-		} else {
-			WRITE(p, "%s vec4 fragColor0;\n", qualifierColor0);
 		}
 	}
 
@@ -291,16 +179,20 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 		WRITE(p, "float mymod(float a, float b) { return a - b * floor(a / b); }\n");
 	}
 
-	WRITE(p, "void main() {\n");
+	if (replaceBlend == REPLACE_BLEND_COPY_FBO)
+		WRITE(p, "  float2 gl_FragCoord : WPOS,\n");
+	WRITE(p, "  float4 v_color0 : COLOR0\n");
+	WRITE(p, ") {\n");
+	WRITE(p, "  float4 %s;\n", fragColor0);
 
 	if (isModeClear) {
 		// Clear mode does not allow any fancy shading.
-		WRITE(p, "  vec4 v = v_color0;\n");
+		WRITE(p, "  float4 v = v_color0;\n");
 	} else {
 		const char *secondary = "";
 		// Secondary color for specular on top of texture
 		if (lmode) {
-			WRITE(p, "  vec4 s = vec4(v_color1, 0.0);\n");
+			WRITE(p, "  float4 s = float4(v_color1, 0.0);\n");
 			secondary = " + s";
 		} else {
 			secondary = "";
@@ -328,7 +220,7 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 					vcoord = "(v_texcoord.y / v_texcoord.z)";
 				}
 
-				std::string modulo = (gl_extensions.bugs & BUG_PVR_SHADER_PRECISION_BAD) ? "mymod" : "mod";
+				std::string modulo = (gl_extensions.bugs & BUG_PVR_SHADER_PRECISION_BAD) ? "mymod" : "fmod";
 
 				if (id.Bit(FS_BIT_CLAMP_S)) {
 					ucoord = "clamp(" + ucoord + ", u_texclamp.z, u_texclamp.x - u_texclamp.z)";
@@ -345,7 +237,7 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 					vcoord = "(" + vcoord + " + u_texclampoff.y)";
 				}
 
-				WRITE(p, "  vec2 fixedcoord = vec2(%s, %s);\n", ucoord.c_str(), vcoord.c_str());
+				WRITE(p, "  float2 fixedcoord = float2(%s, %s);\n", ucoord.c_str(), vcoord.c_str());
 				texcoord = "fixedcoord";
 				// We already projected it.
 				doTextureProjection = false;
@@ -353,32 +245,32 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 
 			if (!shaderDepal) {
 				if (doTextureProjection) {
-					WRITE(p, "  vec4 t = %sProj(tex, %s);\n", texture, texcoord);
+					WRITE(p, "  float4 t = %sProj(tex, %s);\n", texture, texcoord);
 				} else {
-					WRITE(p, "  vec4 t = %s(tex, %s.xy);\n", texture, texcoord);
+					WRITE(p, "  float4 t = %s(tex, %s.xy);\n", texture, texcoord);
 				}
 			} else {
 				if (doTextureProjection) {
 					// We don't use textureProj because we need better control and it's probably not much of a savings anyway.
 					// However it is good for precision on older hardware like PowerVR.
-					WRITE(p, "  vec2 uv = %s.xy/%s.z;\n  vec2 uv_round;\n", texcoord, texcoord);
+					WRITE(p, "  float2 uv = %s.xy/%s.z;\n  float2 uv_round;\n", texcoord, texcoord);
 				} else {
-					WRITE(p, "  vec2 uv = %s.xy;\n  vec2 uv_round;\n", texcoord);
+					WRITE(p, "  float2 uv = %s.xy;\n  float2 uv_round;\n", texcoord);
 				}
-				WRITE(p, "  vec2 tsize = vec2(textureSize(tex, 0));\n");
-				WRITE(p, "  vec2 fraction;\n");
+				WRITE(p, "  float2 tsize = float2(textureSize(tex, 0));\n");
+				WRITE(p, "  float2 fraction;\n");
 				WRITE(p, "  bool bilinear = (u_depal >> 31) != 0;\n");
 				WRITE(p, "  if (bilinear) {\n");
-				WRITE(p, "    uv_round = uv * tsize - vec2(0.5, 0.5);\n");
+				WRITE(p, "    uv_round = uv * tsize - float2(0.5, 0.5);\n");
 				WRITE(p, "    fraction = fract(uv_round);\n");
-				WRITE(p, "    uv_round = (uv_round - fraction + vec2(0.5, 0.5)) / tsize;\n");  // We want to take our four point samples at pixel centers.
+				WRITE(p, "    uv_round = (uv_round - fraction + float2(0.5, 0.5)) / tsize;\n");  // We want to take our four point samples at pixel centers.
 				WRITE(p, "  } else {\n");
 				WRITE(p, "    uv_round = uv;\n");
 				WRITE(p, "  }\n");
-				WRITE(p, "  vec4 t = %s(tex, uv_round);\n", texture);
-				WRITE(p, "  vec4 t1 = %sOffset(tex, uv_round, ivec2(1, 0));\n", texture);
-				WRITE(p, "  vec4 t2 = %sOffset(tex, uv_round, ivec2(0, 1));\n", texture);
-				WRITE(p, "  vec4 t3 = %sOffset(tex, uv_round, ivec2(1, 1));\n", texture);
+				WRITE(p, "  float4 t = %s(tex, uv_round);\n", texture);
+				WRITE(p, "  float4 t1 = %sOffset(tex, uv_round, ivec2(1, 0));\n", texture);
+				WRITE(p, "  float4 t2 = %sOffset(tex, uv_round, ivec2(0, 1));\n", texture);
+				WRITE(p, "  float4 t3 = %sOffset(tex, uv_round, ivec2(1, 1));\n", texture);
 				WRITE(p, "  int depalMask = (u_depal & 0xFF);\n");
 				WRITE(p, "  int depalShift = ((u_depal >> 8) & 0xFF);\n");
 				WRITE(p, "  int depalOffset = (((u_depal >> 16) & 0xFF) << 4);\n");
@@ -386,50 +278,50 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 				WRITE(p, "  ivec4 col; int index0; int index1; int index2; int index3;\n");
 				WRITE(p, "  switch (depalFmt) {\n");  // We might want to include fmt in the shader ID if this is a performance issue.
 				WRITE(p, "  case 0:\n");  // 565
-				WRITE(p, "    col = ivec4(t.rgb * vec3(31.99, 63.99, 31.99), 0);\n");
+				WRITE(p, "    col = ivec4(t.rgb * float3(31.99, 63.99, 31.99), 0);\n");
 				WRITE(p, "    index0 = (col.b << 11) | (col.g << 5) | (col.r);\n");
 				WRITE(p, "    if (bilinear) {\n");
-				WRITE(p, "      col = ivec4(t1.rgb * vec3(31.99, 63.99, 31.99), 0);\n");
+				WRITE(p, "      col = ivec4(t1.rgb * float3(31.99, 63.99, 31.99), 0);\n");
 				WRITE(p, "      index1 = (col.b << 11) | (col.g << 5) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t2.rgb * vec3(31.99, 63.99, 31.99), 0);\n");
+				WRITE(p, "      col = ivec4(t2.rgb * float3(31.99, 63.99, 31.99), 0);\n");
 				WRITE(p, "      index2 = (col.b << 11) | (col.g << 5) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t3.rgb * vec3(31.99, 63.99, 31.99), 0);\n");
+				WRITE(p, "      col = ivec4(t3.rgb * float3(31.99, 63.99, 31.99), 0);\n");
 				WRITE(p, "      index3 = (col.b << 11) | (col.g << 5) | (col.r);\n");
 				WRITE(p, "    }\n");
 				WRITE(p, "    break;\n");
 				WRITE(p, "  case 1:\n");  // 5551
-				WRITE(p, "    col = ivec4(t.rgba * vec4(31.99, 31.99, 31.99, 1.0));\n");
+				WRITE(p, "    col = ivec4(t.rgba * float4(31.99, 31.99, 31.99, 1.0));\n");
 				WRITE(p, "    index0 = (col.a << 15) | (col.b << 10) | (col.g << 5) | (col.r);\n");
 				WRITE(p, "    if (bilinear) {\n");
-				WRITE(p, "      col = ivec4(t1.rgba * vec4(31.99, 31.99, 31.99, 1.0));\n");
+				WRITE(p, "      col = ivec4(t1.rgba * float4(31.99, 31.99, 31.99, 1.0));\n");
 				WRITE(p, "      index1 = (col.a << 15) | (col.b << 10) | (col.g << 5) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t2.rgba * vec4(31.99, 31.99, 31.99, 1.0));\n");
+				WRITE(p, "      col = ivec4(t2.rgba * float4(31.99, 31.99, 31.99, 1.0));\n");
 				WRITE(p, "      index2 = (col.a << 15) | (col.b << 10) | (col.g << 5) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t3.rgba * vec4(31.99, 31.99, 31.99, 1.0));\n");
+				WRITE(p, "      col = ivec4(t3.rgba * float4(31.99, 31.99, 31.99, 1.0));\n");
 				WRITE(p, "      index3 = (col.a << 15) | (col.b << 10) | (col.g << 5) | (col.r);\n");
 				WRITE(p, "    }\n");
 				WRITE(p, "    break;\n");
 				WRITE(p, "  case 2:\n");  // 4444
-				WRITE(p, "    col = ivec4(t.rgba * vec4(15.99, 15.99, 15.99, 15.99));\n");
+				WRITE(p, "    col = ivec4(t.rgba * float4(15.99, 15.99, 15.99, 15.99));\n");
 				WRITE(p, "    index0 = (col.a << 12) | (col.b << 8) | (col.g << 4) | (col.r);\n");
 				WRITE(p, "    if (bilinear) {\n");
-				WRITE(p, "      col = ivec4(t1.rgba * vec4(15.99, 15.99, 15.99, 15.99));\n");
+				WRITE(p, "      col = ivec4(t1.rgba * float4(15.99, 15.99, 15.99, 15.99));\n");
 				WRITE(p, "      index1 = (col.a << 12) | (col.b << 8) | (col.g << 4) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t2.rgba * vec4(15.99, 15.99, 15.99, 15.99));\n");
+				WRITE(p, "      col = ivec4(t2.rgba * float4(15.99, 15.99, 15.99, 15.99));\n");
 				WRITE(p, "      index2 = (col.a << 12) | (col.b << 8) | (col.g << 4) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t3.rgba * vec4(15.99, 15.99, 15.99, 15.99));\n");
+				WRITE(p, "      col = ivec4(t3.rgba * float4(15.99, 15.99, 15.99, 15.99));\n");
 				WRITE(p, "      index3 = (col.a << 12) | (col.b << 8) | (col.g << 4) | (col.r);\n");
 				WRITE(p, "    }\n");
 				WRITE(p, "    break;\n");
 				WRITE(p, "  case 3:\n");  // 8888
-				WRITE(p, "    col = ivec4(t.rgba * vec4(255.99, 255.99, 255.99, 255.99));\n");
+				WRITE(p, "    col = ivec4(t.rgba * float4(255.99, 255.99, 255.99, 255.99));\n");
 				WRITE(p, "    index0 = (col.a << 24) | (col.b << 16) | (col.g << 8) | (col.r);\n");
 				WRITE(p, "    if (bilinear) {\n");
-				WRITE(p, "      col = ivec4(t1.rgba * vec4(255.99, 255.99, 255.99, 255.99));\n");
+				WRITE(p, "      col = ivec4(t1.rgba * float4(255.99, 255.99, 255.99, 255.99));\n");
 				WRITE(p, "      index1 = (col.a << 24) | (col.b << 16) | (col.g << 8) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t2.rgba * vec4(255.99, 255.99, 255.99, 255.99));\n");
+				WRITE(p, "      col = ivec4(t2.rgba * float4(255.99, 255.99, 255.99, 255.99));\n");
 				WRITE(p, "      index2 = (col.a << 24) | (col.b << 16) | (col.g << 8) | (col.r);\n");
-				WRITE(p, "      col = ivec4(t3.rgba * vec4(255.99, 255.99, 255.99, 255.99));\n");
+				WRITE(p, "      col = ivec4(t3.rgba * float4(255.99, 255.99, 255.99, 255.99));\n");
 				WRITE(p, "      index3 = (col.a << 24) | (col.b << 16) | (col.g << 8) | (col.r);\n");
 				WRITE(p, "    }\n");
 				WRITE(p, "    break;\n");
@@ -443,67 +335,67 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 				WRITE(p, "    t1 = texelFetch(pal, ivec2(index1, 0), 0);\n");
 				WRITE(p, "    t2 = texelFetch(pal, ivec2(index2, 0), 0);\n");
 				WRITE(p, "    t3 = texelFetch(pal, ivec2(index3, 0), 0);\n");
-				WRITE(p, "    t = mix(t, t1, fraction.x);\n");
-				WRITE(p, "    t2 = mix(t2, t3, fraction.x);\n");
-				WRITE(p, "    t = mix(t, t2, fraction.y);\n");
+				WRITE(p, "    t = lerp(t, t1, fraction.x);\n");
+				WRITE(p, "    t2 = lerp(t2, t3, fraction.x);\n");
+				WRITE(p, "    t = lerp(t, t2, fraction.y);\n");
 				WRITE(p, "  }\n");
 			}
 
 			if (texFunc != GE_TEXFUNC_REPLACE || !doTextureAlpha)
-				WRITE(p, "  vec4 p = v_color0;\n");
+				WRITE(p, "  float4 p = v_color0;\n");
 
 			if (doTextureAlpha) { // texfmt == RGBA
 				switch (texFunc) {
 				case GE_TEXFUNC_MODULATE:
-					WRITE(p, "  vec4 v = p * t%s;\n", secondary); 
+					WRITE(p, "  float4 v = p * t%s;\n", secondary);
 					break;
 
 				case GE_TEXFUNC_DECAL:
-					WRITE(p, "  vec4 v = vec4(mix(p.rgb, t.rgb, t.a), p.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(lerp(p.rgb, t.rgb, t.a), p.a)%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_BLEND:
-					WRITE(p, "  vec4 v = vec4(mix(p.rgb, u_texenv.rgb, t.rgb), p.a * t.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(lerp(p.rgb, u_texenv.rgb, t.rgb), p.a * t.a)%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_REPLACE:
-					WRITE(p, "  vec4 v = t%s;\n", secondary); 
+					WRITE(p, "  float4 v = t%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_ADD:
 				case GE_TEXFUNC_UNKNOWN1:
 				case GE_TEXFUNC_UNKNOWN2:
 				case GE_TEXFUNC_UNKNOWN3:
-					WRITE(p, "  vec4 v = vec4(p.rgb + t.rgb, p.a * t.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(p.rgb + t.rgb, p.a * t.a)%s;\n", secondary); 
 					break;
 				default:
-					WRITE(p, "  vec4 v = p;\n"); break;
+					WRITE(p, "  float4 v = p;\n"); break;
 				}
 			} else { // texfmt == RGB
 				switch (texFunc) {
 				case GE_TEXFUNC_MODULATE:
-					WRITE(p, "  vec4 v = vec4(t.rgb * p.rgb, p.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(t.rgb * p.rgb, p.a)%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_DECAL:
-					WRITE(p, "  vec4 v = vec4(t.rgb, p.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(t.rgb, p.a)%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_BLEND:
-					WRITE(p, "  vec4 v = vec4(mix(p.rgb, u_texenv.rgb, t.rgb), p.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(lerp(p.rgb, u_texenv.rgb, t.rgb), p.a)%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_REPLACE:
-					WRITE(p, "  vec4 v = vec4(t.rgb, p.a)%s;\n", secondary); 
+					WRITE(p, "  float4 v = float4(t.rgb, p.a)%s;\n", secondary); 
 					break;
 
 				case GE_TEXFUNC_ADD:
 				case GE_TEXFUNC_UNKNOWN1:
 				case GE_TEXFUNC_UNKNOWN2:
 				case GE_TEXFUNC_UNKNOWN3:
-					WRITE(p, "  vec4 v = vec4(p.rgb + t.rgb, p.a)%s;\n", secondary); break;
+					WRITE(p, "  float4 v = float4(p.rgb + t.rgb, p.a)%s;\n", secondary); break;
 				default:
-					WRITE(p, "  vec4 v = p;\n"); break;
+					WRITE(p, "  float4 v = p;\n"); break;
 				}
 			}
 
@@ -513,12 +405,12 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 			}
 		} else {
 			// No texture mapping
-			WRITE(p, "  vec4 v = v_color0 %s;\n", secondary);
+			WRITE(p, "  float4 v = v_color0 %s;\n", secondary);
 		}
 
 		if (enableFog) {
 			WRITE(p, "  float fogCoef = clamp(v_fogdepth, 0.0, 1.0);\n");
-			WRITE(p, "  v = mix(vec4(u_fogcolor, v.a), v, fogCoef);\n");
+			WRITE(p, "  v = lerp(float4(u_fogcolor, v.a), v, fogCoef);\n");
 			// WRITE(p, "  v.x = v_depth;\n");
 		}
 
@@ -527,7 +419,7 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 		std::string alphaTestXCoord = "0";
 		if (g_Config.bFragmentTestCache) {
 			if (enableColorTest && !colorTestAgainstZero) {
-				WRITE(p, "  vec4 vScale256 = v * %f + %f;\n", 255.0 / 256.0, 0.5 / 256.0);
+				WRITE(p, "  float4 vScale256 = v * %f + %f;\n", 255.0 / 256.0, 0.5 / 256.0);
 				alphaTestXCoord = "vScale256.a";
 			} else if (enableAlphaTest && !alphaTestAgainstZero) {
 				char temp[64];
@@ -552,7 +444,7 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 					WRITE(p, "  %s\n", discardStatement);
 				}
 			} else if (g_Config.bFragmentTestCache) {
-				WRITE(p, "  float aResult = %s(testtex, vec2(%s, 0)).a;\n", texture, alphaTestXCoord.c_str());
+				WRITE(p, "  float aResult = %s(testtex, float2(%s, 0)).a;\n", texture, alphaTestXCoord.c_str());
 				WRITE(p, "  if (aResult < 0.5) %s\n", discardStatement);
 			} else {
 				const char *alphaTestFuncs[] = { "#", "#", " != ", " == ", " >= ", " > ", " <= ", " < " };
@@ -589,9 +481,9 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 					WRITE(p, "  %s\n", discardStatement);
 				}
 			} else if (g_Config.bFragmentTestCache) {
-				WRITE(p, "  float rResult = %s(testtex, vec2(vScale256.r, 0)).r;\n", texture);
-				WRITE(p, "  float gResult = %s(testtex, vec2(vScale256.g, 0)).g;\n", texture);
-				WRITE(p, "  float bResult = %s(testtex, vec2(vScale256.b, 0)).b;\n", texture);
+				WRITE(p, "  float rResult = %s(testtex, float2(vScale256.r, 0)).r;\n", texture);
+				WRITE(p, "  float gResult = %s(testtex, float2(vScale256.g, 0)).g;\n", texture);
+				WRITE(p, "  float bResult = %s(testtex, float2(vScale256.b, 0)).b;\n", texture);
 				if (colorTestFunc == GE_COMP_EQUAL) {
 					// Equal means all parts must be equal (so discard if any is not.)
 					WRITE(p, "  if (rResult < 0.5 || gResult < 0.5 || bResult < 0.5) %s\n", discardStatement);
@@ -628,15 +520,15 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 			switch (replaceBlendFuncA) {
 			case GE_SRCBLEND_DSTCOLOR:          srcFactor = "ERROR"; break;
 			case GE_SRCBLEND_INVDSTCOLOR:       srcFactor = "ERROR"; break;
-			case GE_SRCBLEND_SRCALPHA:          srcFactor = "vec3(v.a)"; break;
-			case GE_SRCBLEND_INVSRCALPHA:       srcFactor = "vec3(1.0 - v.a)"; break;
+			case GE_SRCBLEND_SRCALPHA:          srcFactor = "float3(v.a)"; break;
+			case GE_SRCBLEND_INVSRCALPHA:       srcFactor = "float3(1.0 - v.a)"; break;
 			case GE_SRCBLEND_DSTALPHA:          srcFactor = "ERROR"; break;
 			case GE_SRCBLEND_INVDSTALPHA:       srcFactor = "ERROR"; break;
-			case GE_SRCBLEND_DOUBLESRCALPHA:    srcFactor = "vec3(v.a * 2.0)"; break;
-			case GE_SRCBLEND_DOUBLEINVSRCALPHA: srcFactor = "vec3(1.0 - v.a * 2.0)"; break;
+			case GE_SRCBLEND_DOUBLESRCALPHA:    srcFactor = "float3(v.a * 2.0)"; break;
+			case GE_SRCBLEND_DOUBLEINVSRCALPHA: srcFactor = "float3(1.0 - v.a * 2.0)"; break;
 			// PRE_SRC for REPLACE_BLEND_PRE_SRC_2X_ALPHA means "double the src."
 			// It's close to the same, but clamping can still be an issue.
-			case GE_SRCBLEND_DOUBLEDSTALPHA:    srcFactor = "vec3(2.0)"; break;
+			case GE_SRCBLEND_DOUBLEDSTALPHA:    srcFactor = "float3(2.0)"; break;
 			case GE_SRCBLEND_DOUBLEINVDSTALPHA: srcFactor = "ERROR"; break;
 			case GE_SRCBLEND_FIXA:              srcFactor = "u_blendFixA"; break;
 			default:                            srcFactor = "u_blendFixA"; break;
@@ -648,42 +540,43 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 		if (replaceBlend == REPLACE_BLEND_COPY_FBO) {
 			// If we have NV_shader_framebuffer_fetch / EXT_shader_framebuffer_fetch, we skip the blit.
 			// We can just read the prev value more directly.
+			// TODO(theflow)
 			if (gstate_c.Supports(GPU_SUPPORTS_ANY_FRAMEBUFFER_FETCH)) {
-				WRITE(p, "  lowp vec4 destColor = %s;\n", lastFragData);
+				WRITE(p, "  float4 destColor = %s;\n", lastFragData);
 			} else if (!texelFetch) {
-				WRITE(p, "  lowp vec4 destColor = %s(fbotex, gl_FragCoord.xy * u_fbotexSize.xy);\n", texture);
+				WRITE(p, "  float4 destColor = %s(fbotex, gl_FragCoord.xy * u_fbotexSize.xy);\n", texture);
 			} else {
-				WRITE(p, "  lowp vec4 destColor = %s(fbotex, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);\n", texelFetch);
+				WRITE(p, "  float4 destColor = %s(fbotex, ivec2(gl_FragCoord.x, gl_FragCoord.y), 0);\n", texelFetch);
 			}
 
-			const char *srcFactor = "vec3(1.0)";
-			const char *dstFactor = "vec3(0.0)";
+			const char *srcFactor = "float3(1.0)";
+			const char *dstFactor = "float3(0.0)";
 
 			switch (replaceBlendFuncA) {
 			case GE_SRCBLEND_DSTCOLOR:          srcFactor = "destColor.rgb"; break;
-			case GE_SRCBLEND_INVDSTCOLOR:       srcFactor = "(vec3(1.0) - destColor.rgb)"; break;
-			case GE_SRCBLEND_SRCALPHA:          srcFactor = "vec3(v.a)"; break;
-			case GE_SRCBLEND_INVSRCALPHA:       srcFactor = "vec3(1.0 - v.a)"; break;
-			case GE_SRCBLEND_DSTALPHA:          srcFactor = "vec3(destColor.a)"; break;
-			case GE_SRCBLEND_INVDSTALPHA:       srcFactor = "vec3(1.0 - destColor.a)"; break;
-			case GE_SRCBLEND_DOUBLESRCALPHA:    srcFactor = "vec3(v.a * 2.0)"; break;
-			case GE_SRCBLEND_DOUBLEINVSRCALPHA: srcFactor = "vec3(1.0 - v.a * 2.0)"; break;
-			case GE_SRCBLEND_DOUBLEDSTALPHA:    srcFactor = "vec3(destColor.a * 2.0)"; break;
-			case GE_SRCBLEND_DOUBLEINVDSTALPHA: srcFactor = "vec3(1.0 - destColor.a * 2.0)"; break;
+			case GE_SRCBLEND_INVDSTCOLOR:       srcFactor = "(float3(1.0) - destColor.rgb)"; break;
+			case GE_SRCBLEND_SRCALPHA:          srcFactor = "float3(v.a)"; break;
+			case GE_SRCBLEND_INVSRCALPHA:       srcFactor = "float3(1.0 - v.a)"; break;
+			case GE_SRCBLEND_DSTALPHA:          srcFactor = "float3(destColor.a)"; break;
+			case GE_SRCBLEND_INVDSTALPHA:       srcFactor = "float3(1.0 - destColor.a)"; break;
+			case GE_SRCBLEND_DOUBLESRCALPHA:    srcFactor = "float3(v.a * 2.0)"; break;
+			case GE_SRCBLEND_DOUBLEINVSRCALPHA: srcFactor = "float3(1.0 - v.a * 2.0)"; break;
+			case GE_SRCBLEND_DOUBLEDSTALPHA:    srcFactor = "float3(destColor.a * 2.0)"; break;
+			case GE_SRCBLEND_DOUBLEINVDSTALPHA: srcFactor = "float3(1.0 - destColor.a * 2.0)"; break;
 			case GE_SRCBLEND_FIXA:              srcFactor = "u_blendFixA"; break;
 			default:                            srcFactor = "u_blendFixA"; break;
 			}
 			switch (replaceBlendFuncB) {
 			case GE_DSTBLEND_SRCCOLOR:          dstFactor = "v.rgb"; break;
-			case GE_DSTBLEND_INVSRCCOLOR:       dstFactor = "(vec3(1.0) - v.rgb)"; break;
-			case GE_DSTBLEND_SRCALPHA:          dstFactor = "vec3(v.a)"; break;
-			case GE_DSTBLEND_INVSRCALPHA:       dstFactor = "vec3(1.0 - v.a)"; break;
-			case GE_DSTBLEND_DSTALPHA:          dstFactor = "vec3(destColor.a)"; break;
-			case GE_DSTBLEND_INVDSTALPHA:       dstFactor = "vec3(1.0 - destColor.a)"; break;
-			case GE_DSTBLEND_DOUBLESRCALPHA:    dstFactor = "vec3(v.a * 2.0)"; break;
-			case GE_DSTBLEND_DOUBLEINVSRCALPHA: dstFactor = "vec3(1.0 - v.a * 2.0)"; break;
-			case GE_DSTBLEND_DOUBLEDSTALPHA:    dstFactor = "vec3(destColor.a * 2.0)"; break;
-			case GE_DSTBLEND_DOUBLEINVDSTALPHA: dstFactor = "vec3(1.0 - destColor.a * 2.0)"; break;
+			case GE_DSTBLEND_INVSRCCOLOR:       dstFactor = "(float3(1.0) - v.rgb)"; break;
+			case GE_DSTBLEND_SRCALPHA:          dstFactor = "float3(v.a)"; break;
+			case GE_DSTBLEND_INVSRCALPHA:       dstFactor = "float3(1.0 - v.a)"; break;
+			case GE_DSTBLEND_DSTALPHA:          dstFactor = "float3(destColor.a)"; break;
+			case GE_DSTBLEND_INVDSTALPHA:       dstFactor = "float3(1.0 - destColor.a)"; break;
+			case GE_DSTBLEND_DOUBLESRCALPHA:    dstFactor = "float3(v.a * 2.0)"; break;
+			case GE_DSTBLEND_DOUBLEINVSRCALPHA: dstFactor = "float3(1.0 - v.a * 2.0)"; break;
+			case GE_DSTBLEND_DOUBLEDSTALPHA:    dstFactor = "float3(destColor.a * 2.0)"; break;
+			case GE_DSTBLEND_DOUBLEINVDSTALPHA: dstFactor = "float3(1.0 - destColor.a * 2.0)"; break;
 			case GE_DSTBLEND_FIXB:              dstFactor = "u_blendFixB"; break;
 			default:                            srcFactor = "u_blendFixB"; break;
 			}
@@ -755,12 +648,12 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 
 	switch (stencilToAlpha) {
 	case REPLACE_ALPHA_DUALSOURCE:
-		WRITE(p, "  %s = vec4(v.rgb, %s);\n", fragColor0, replacedAlpha.c_str());
-		WRITE(p, "  %s = vec4(0.0, 0.0, 0.0, v.a);\n", fragColor1);
+		WRITE(p, "  %s = float4(v.rgb, %s);\n", fragColor0, replacedAlpha.c_str());
+		WRITE(p, "  %s = float4(0.0, 0.0, 0.0, v.a);\n", fragColor1);
 		break;
 
 	case REPLACE_ALPHA_YES:
-		WRITE(p, "  %s = vec4(v.rgb, %s);\n", fragColor0, replacedAlpha.c_str());
+		WRITE(p, "  %s = float4(v.rgb, %s);\n", fragColor0, replacedAlpha.c_str());
 		break;
 
 	case REPLACE_ALPHA_NO:
@@ -775,10 +668,10 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 	LogicOpReplaceType replaceLogicOpType = (LogicOpReplaceType)id.Bits(FS_BIT_REPLACE_LOGIC_OP_TYPE, 2);
 	switch (replaceLogicOpType) {
 	case LOGICOPTYPE_ONE:
-		WRITE(p, "  %s.rgb = vec3(1.0, 1.0, 1.0);\n", fragColor0);
+		WRITE(p, "  %s.rgb = float3(1.0, 1.0, 1.0);\n", fragColor0);
 		break;
 	case LOGICOPTYPE_INVERT:
-		WRITE(p, "  %s.rgb = vec3(1.0, 1.0, 1.0) - %s.rgb;\n", fragColor0, fragColor0);
+		WRITE(p, "  %s.rgb = float3(1.0, 1.0, 1.0) - %s.rgb;\n", fragColor0, fragColor0);
 		break;
 	case LOGICOPTYPE_NORMAL:
 		break;
@@ -791,16 +684,16 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 #ifdef DEBUG_SHADER
 	if (doTexture) {
 		WRITE(p, "  %s = texture2D(tex, v_texcoord.xy);\n", fragColor0);
-		WRITE(p, "  %s += vec4(0.3,0,0.3,0.3);\n", fragColor0);
+		WRITE(p, "  %s += float4(0.3,0,0.3,0.3);\n", fragColor0);
 	} else {
-		WRITE(p, "  %s = vec4(1,0,1,1);\n", fragColor0);
+		WRITE(p, "  %s = float4(1,0,1,1);\n", fragColor0);
 	}
 #endif
 
 	if (gstate_c.Supports(GPU_ROUND_FRAGMENT_DEPTH_TO_16BIT)) {
 		const double scale = DepthSliceFactor() * 65535.0;
 
-		WRITE(p, "  highp float z = gl_FragCoord.z;\n");
+		WRITE(p, "  float z = gl_FragCoord.z;\n");
 		if (gstate_c.Supports(GPU_SUPPORTS_ACCURATE_DEPTH)) {
 			// We center the depth with an offset, but only its fraction matters.
 			// When (DepthSliceFactor() - 1) is odd, it will be 0.5, otherwise 0.
@@ -815,6 +708,7 @@ bool GenerateFragmentShader(const FShaderID &id, char *buffer, uint64_t *uniform
 		WRITE(p, "  gl_FragDepth = z;\n");
 	}
 
+	WRITE(p, "  return %s;\n", fragColor0);
 	WRITE(p, "}\n");
 
 	return true;

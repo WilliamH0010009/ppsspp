@@ -137,7 +137,7 @@ std::string GetLocalIP(int sock) {
 	union {
 		struct sockaddr sa;
 		struct sockaddr_in ipv4;
-#if !PPSSPP_PLATFORM(SWITCH)
+#if !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 		struct sockaddr_in6 ipv6;
 #endif
 	} server_addr;
@@ -148,7 +148,7 @@ std::string GetLocalIP(int sock) {
 
 		// We clear the port below for WSAAddressToStringA.
 		void *addr = nullptr;
-#if !PPSSPP_PLATFORM(SWITCH)
+#if !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 		if (server_addr.sa.sa_family == AF_INET6) {
 			server_addr.ipv6.sin6_port = 0;
 			addr = &server_addr.ipv6.sin6_addr;
@@ -165,10 +165,10 @@ std::string GetLocalIP(int sock) {
 			return temp;
 		}
 #else
-		const char *result = inet_ntop(server_addr.sa.sa_family, addr, temp, sizeof(temp));
-		if (result) {
-			return result;
-		}
+		// const char *result = inet_ntop(server_addr.sa.sa_family, addr, temp, sizeof(temp));
+		// if (result) {
+			// return result;
+		// }
 #endif
 	}
 	return "";

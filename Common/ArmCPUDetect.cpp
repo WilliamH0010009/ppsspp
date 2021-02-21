@@ -231,7 +231,7 @@ void CPUInfo::Detect()
 	vendor = VENDOR_ARM;
 
 	// Get the information about the CPU 
-#if !PPSSPP_PLATFORM(LINUX)
+#if !PPSSPP_PLATFORM(LINUX) && !PPSSPP_PLATFORM(VITA)
 	bool isVFP3 = false;
 	bool isVFP4 = false;
 #if PPSSPP_PLATFORM(IOS)
@@ -268,6 +268,25 @@ void CPUInfo::Detect()
 	bVFPv4 = isVFP4;
 	bIDIVa = isVFP4;
 	bIDIVt = isVFP4;
+	bFP = false;
+	bASIMD = false;
+#elif PPSSPP_PLATFORM(VITA)
+	strcpy(brand_string, "Vita");
+	num_cores = 3;
+	truncate_cpy(cpu_string, brand_string);
+	bSwp = true;
+	bHalf = true;
+	bThumb = true;
+	bFastMult = true;
+	bVFP = true;
+	bEDSP = true;
+	bThumbEE = true;
+	bNEON = true;
+	bVFPv3 = true;
+	bTLS = true;
+	bVFPv4 = false;
+	bIDIVa = false;
+	bIDIVt = false;
 	bFP = false;
 	bASIMD = false;
 #else // PPSSPP_PLATFORM(LINUX)

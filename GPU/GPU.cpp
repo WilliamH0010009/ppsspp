@@ -99,7 +99,7 @@ bool GPU_Init(GraphicsContext *ctx, Draw::DrawContext *draw) {
 			ERROR_LOG(G3D, "Unable to init Vulkan GPU backend, no context");
 			break;
 		}
-		SetGPU(new GPU_Vulkan(ctx, draw));
+		// SetGPU(new GPU_Vulkan(ctx, draw));
 		break;
 	}
 

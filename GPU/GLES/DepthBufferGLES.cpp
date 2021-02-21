@@ -26,49 +26,32 @@
 #include "GPU/GLES/TextureCacheGLES.h"
 
 static const char *depth_dl_fs = R"(
-#ifdef GL_ES
-#ifdef GL_FRAGMENT_PRECISION_HIGH
-precision highp float;
-#else
-precision mediump float;
-#endif
-#endif
-#if __VERSION__ >= 130
-#define varying in
-#define texture2D texture
-#define gl_FragColor fragColor0
-out vec4 fragColor0;
-#endif
-varying vec2 v_texcoord0;
-uniform vec2 u_depthFactor;
-uniform vec4 u_depthShift;
-uniform vec4 u_depthTo8;
-uniform sampler2D tex;
-void main() {
-  float depth = texture2D(tex, v_texcoord0).r;
+float4 main(
+	float2 v_texcoord0,
+	uniform float2 u_depthFactor,
+	uniform float4 u_depthShift,
+	uniform float4 u_depthTo8,
+	uniform sampler2D tex
+) {
+  float depth = tex2D(tex, v_texcoord0).r;
   // At this point, clamped maps [0, 1] to [0, 65535].
   float clamped = clamp((depth + u_depthFactor.x) * u_depthFactor.y, 0.0, 1.0);
 
-  vec4 enc = u_depthShift * clamped;
-  enc = floor(mod(enc, 256.0)) * u_depthTo8;
+  float4 enc = u_depthShift * clamped;
+  enc = floor(fmod(enc, 256.0)) * u_depthTo8;
   enc = enc * u_depthTo8;
   // Let's ignore the bits outside 16 bit precision.
-  gl_FragColor = enc.yzww;
+  return enc.yzww;
 }
 )";
 
 static const char *depth_vs = R"(
-#ifdef GL_ES
-precision highp float;
-#endif
-#if __VERSION__ >= 130
-#define attribute in
-#define varying out
-#endif
-attribute vec4 a_position;
-attribute vec2 a_texcoord0;
-varying vec2 v_texcoord0;
-void main() {
+void main(
+	float4 a_position,
+	float2 a_texcoord0,
+	float4 out gl_Position : POSITION,
+	float2 out v_texcoord0 : TEXCOORD0
+) {
   v_texcoord0 = a_texcoord0;
   gl_Position = a_position;
 }

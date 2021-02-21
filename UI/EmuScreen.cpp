@@ -1222,7 +1222,7 @@ void EmuScreen::update() {
 
 		if (saveStatePreview_->GetVisibility() == UI::V_VISIBLE) {
 			double endTime = saveStatePreviewShownTime_ + 2.0;
-			float alpha = clamp_value((endTime - time_now_d()) * 4.0, 0.0, 1.0);
+			float alpha = 0; // clamp_value((endTime - time_now_d()) * 4.0, 0.0, 1.0);
 			saveStatePreview_->SetColor(colorAlpha(0x00FFFFFF, alpha));
 
 			if (time_now_d() - saveStatePreviewShownTime_ > 2) {
@@ -1508,13 +1508,13 @@ void EmuScreen::renderUI() {
 	}
 
 #if !PPSSPP_PLATFORM(UWP)
-	if (g_Config.iGPUBackend == (int)GPUBackend::VULKAN && g_Config.bShowAllocatorDebug) {
-		DrawAllocatorVis(ctx, gpu);
-	}
+	// if (g_Config.iGPUBackend == (int)GPUBackend::VULKAN && g_Config.bShowAllocatorDebug) {
+		// DrawAllocatorVis(ctx, gpu);
+	// }
 
-	if (g_Config.iGPUBackend == (int)GPUBackend::VULKAN && g_Config.bShowGpuProfile) {
-		DrawProfilerVis(ctx, gpu);
-	}
+	// if (g_Config.iGPUBackend == (int)GPUBackend::VULKAN && g_Config.bShowGpuProfile) {
+		// DrawProfilerVis(ctx, gpu);
+	// }
 
 #endif
 

@@ -627,6 +627,7 @@ void ARMXEmitter::FlushIcache()
 	lastCacheFlushEnd = code;
 }
 
+#include <kubridge.h>
 void ARMXEmitter::FlushIcacheSection(u8 *start, u8 *end)
 {
 #if defined(IOS)
@@ -636,10 +637,14 @@ void ARMXEmitter::FlushIcacheSection(u8 *start, u8 *end)
 	FlushInstructionCache(GetCurrentProcess(), start, end - start);
 #elif PPSSPP_ARCH(ARM)
 
+#ifdef VITA
+	kuKernelFlushCaches(start, end - start);
+#else
 #if defined(__clang__) || defined(__ANDROID__)
 	__clear_cache(start, end);
 #else
 	__builtin___clear_cache(start, end);
+#endif
 #endif
 
 #endif

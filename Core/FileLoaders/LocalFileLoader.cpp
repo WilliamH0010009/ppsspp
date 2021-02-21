@@ -29,6 +29,10 @@
 #include <fcntl.h>
 #endif
 
+#if PPSSPP_PLATFORM(VITA)
+#define O_CLOEXEC 0
+#endif
+
 LocalFileLoader::LocalFileLoader(const std::string &filename)
 	: filesize_(0), filename_(filename) {
 	if (filename.empty()) {
@@ -117,7 +121,7 @@ std::string LocalFileLoader::Path() const {
 }
 
 size_t LocalFileLoader::ReadAt(s64 absolutePos, size_t bytes, size_t count, void *data, Flags flags) {
-#if PPSSPP_PLATFORM(SWITCH)
+#if PPSSPP_PLATFORM(SWITCH) || PPSSPP_PLATFORM(VITA)
 	// Toolchain has no fancy IO API.  We must lock.
 	std::lock_guard<std::mutex> guard(readLock_);
 	lseek(fd_, absolutePos, SEEK_SET);

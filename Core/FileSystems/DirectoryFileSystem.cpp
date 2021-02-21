@@ -46,7 +46,7 @@
 #include <sys/types.h>
 #include <sys/vfs.h>
 #define statvfs statfs
-#else
+#elif !defined(VITA)
 #include <sys/statvfs.h>
 #endif
 #include <ctype.h>
@@ -442,7 +442,7 @@ void DirectoryFileHandle::Close()
 		if (SetEndOfFile(hFile) == 0) {
 			ERROR_LOG_REPORT(FILESYS, "Failed to truncate file.");
 		}
-#elif !PPSSPP_PLATFORM(SWITCH)
+#elif !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 		// Note: it's not great that Switch cannot truncate appropriately...
 		if (ftruncate(hFile, (off_t)needsTrunc_) != 0) {
 			ERROR_LOG_REPORT(FILESYS, "Failed to truncate file.");

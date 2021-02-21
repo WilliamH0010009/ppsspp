@@ -136,7 +136,11 @@ void GenerateDepalShader300(char *buffer, GEBufferFormat pixelFormat, ShaderLang
 void GenerateDepalShaderFloat(char *buffer, GEBufferFormat pixelFormat, ShaderLanguage lang) {
 	char *p = buffer;
 
+#ifdef VITA
+	const char *modFunc = "fmod";
+#else
 	const char *modFunc = lang == HLSL_DX9 ? "fmod" : "mod";
+#endif
 
 	char lookupMethod[128] = "index.r";
 	char offset[128] = "";
@@ -248,6 +252,17 @@ void GenerateDepalShaderFloat(char *buffer, GEBufferFormat pixelFormat, ShaderLa
 	sprintf(offset, " + %f", texel_offset);
 
 	if (lang == GLSL_140) {
+#ifdef VITA
+		WRITE(p, "float4 main(\n");
+		WRITE(p, "  float2 v_texcoord0 : TEXCOORD0,\n");
+		WRITE(p, "  uniform sampler2D tex,\n");
+		WRITE(p, "  uniform sampler2D pal\n");
+		WRITE(p, ") {\n");
+		WRITE(p, "  float4 index = tex2D(tex, v_texcoord0);\n");
+		WRITE(p, "  float coord = (%s * %f)%s;\n", lookupMethod, index_multiplier, offset);
+		WRITE(p, "  return tex2D(pal, float2(coord, 0.0));\n");
+		WRITE(p, "}\n");
+#else
 		if (gl_extensions.IsGLES) {
 			WRITE(p, "#version 100\n");
 			WRITE(p, "precision mediump float;\n");
@@ -266,6 +281,7 @@ void GenerateDepalShaderFloat(char *buffer, GEBufferFormat pixelFormat, ShaderLa
 		WRITE(p, "  float coord = (%s * %f)%s;\n", lookupMethod, index_multiplier, offset);
 		WRITE(p, "  gl_FragColor = texture2D(pal, vec2(coord, 0.0));\n");
 		WRITE(p, "}\n");
+#endif
 	} else if (lang == HLSL_DX9) {
 		WRITE(p, "sampler tex: register(s0);\n");
 		WRITE(p, "sampler pal: register(s1);\n");

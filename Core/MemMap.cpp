@@ -218,7 +218,7 @@ bool MemoryMap_Setup(u32 flags) {
 	g_arena.GrabLowMemSpace(total_mem);
 #endif
 
-#if !PPSSPP_PLATFORM(ANDROID)
+#if !PPSSPP_PLATFORM(ANDROID) && !PPSSPP_PLATFORM(VITA)
 	if (g_arena.NeedsProbing()) {
 		int base_attempts = 0;
 #if defined(_WIN32) && PPSSPP_ARCH(32BIT)

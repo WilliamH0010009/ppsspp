@@ -537,7 +537,7 @@ bool IniFile::Load(std::istream &in) {
 
 	while (!(in.eof() || in.fail()))
 	{
-		char templine[MAX_BYTES];
+		static char templine[MAX_BYTES];
 		in.getline(templine, MAX_BYTES);
 		std::string line = templine;
 

@@ -5,6 +5,64 @@
 #include <unistd.h>
 #include <pwd.h>
 
+#ifdef VITA
+#include <psp2/appmgr.h>
+#include <psp2/io/dirent.h>
+#include <psp2/io/fcntl.h>
+#include <psp2/io/stat.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <pib.h>
+
+#define PATH_MAX 4096
+
+int sceLibcHeapSize = 4 * 1024 * 1024;
+
+// 256mb is too much
+int _newlib_heap_size_user = 192 * 1024 * 1024;
+/*
+int printf(const char *format, ...) {
+	va_list list;
+	static char string[4096];
+	va_start(list, format);
+	vsnprintf(string, sizeof(string), format, list);
+	va_end(list);
+	SceUID fd = sceIoOpen("ux0:data/ppsspp.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
+	if (fd >= 0) {
+		sceIoWrite(fd, string, strlen(string));
+		sceIoClose(fd);
+	}
+	return 0;
+}
+
+int puts(const char *s) {
+	SceUID fd = sceIoOpen("ux0:data/ppsspp.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
+	if (fd >= 0) {
+		sceIoWrite(fd, s, strlen(s));
+		sceIoClose(fd);
+	}
+	return 0;
+}
+
+int fprintf(FILE *stream, const char *format, ...) {
+	va_list list;
+	static char string[4096];
+	va_start(list, format);
+	vsnprintf(string, sizeof(string), format, list);
+	va_end(list);
+	SceUID fd = sceIoOpen("ux0:data/ppsspp.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
+	if (fd >= 0) {
+		sceIoWrite(fd, string, strlen(string));
+		sceIoClose(fd);
+	}
+	return 0;
+}
+*/
+#endif
+
 #include "ppsspp_config.h"
 #include "SDL.h"
 #include "SDL/SDLJoystick.h"
@@ -460,12 +518,16 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+#ifdef VITA
+	pibInit(PIB_SHACCCG);
+#endif
+
 #ifdef HAVE_LIBNX
 	socketInitializeDefault();
 	nxlinkStdio();
 #endif // HAVE_LIBNX
 
-	glslang::InitializeProcess();
+	// glslang::InitializeProcess();
 
 #if PPSSPP_PLATFORM(RPI)
 	bcm_host_init();
@@ -473,11 +535,11 @@ int main(int argc, char *argv[]) {
 	putenv((char*)"SDL_VIDEO_CENTERED=1");
 	SDL_SetHint(SDL_HINT_VIDEO_MINIMIZE_ON_FOCUS_LOSS, "0");
 
-	if (VulkanMayBeAvailable()) {
-		printf("DEBUG: Vulkan might be available.\n");
-	} else {
-		printf("DEBUG: Vulkan is not available, not using Vulkan.\n");
-	}
+	// if (VulkanMayBeAvailable()) {
+		// printf("DEBUG: Vulkan might be available.\n");
+	// } else {
+		// printf("DEBUG: Vulkan is not available, not using Vulkan.\n");
+	// }
 
 	SDL_version compiled;
 	SDL_version linked;
@@ -572,9 +634,9 @@ int main(int argc, char *argv[]) {
 	}
 
 	// If we're on mobile, don't try for windowed either.
-#if defined(MOBILE_DEVICE) && !PPSSPP_PLATFORM(SWITCH)
+#if defined(MOBILE_DEVICE) && !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 	mode |= SDL_WINDOW_FULLSCREEN;
-#elif defined(USING_FBDEV) || PPSSPP_PLATFORM(SWITCH)
+#elif defined(USING_FBDEV) || PPSSPP_PLATFORM(SWITCH) || PPSSPP_PLATFORM(VITA)
 	mode |= SDL_WINDOW_FULLSCREEN_DESKTOP;
 #else
 	mode |= SDL_WINDOW_RESIZABLE;
@@ -622,6 +684,8 @@ int main(int argc, char *argv[]) {
 	char path[2048];
 #if PPSSPP_PLATFORM(SWITCH)
 	strcpy(path, "/switch/ppsspp/");
+#elif PPSSPP_PLATFORM(VITA)
+	strcpy(path, "ux0:/data/ppsspp");
 #else
 	const char *the_path = getenv("HOME");
 	if (!the_path) {
@@ -664,20 +728,21 @@ int main(int argc, char *argv[]) {
 			printf("GL init error '%s'\n", error_message.c_str());
 		}
 		graphicsContext = ctx;
-	} else if (g_Config.iGPUBackend == (int)GPUBackend::VULKAN) {
-		SDLVulkanGraphicsContext *ctx = new SDLVulkanGraphicsContext();
-		if (!ctx->Init(window, x, y, mode, &error_message)) {
-			printf("Vulkan init error '%s' - falling back to GL\n", error_message.c_str());
-			g_Config.iGPUBackend = (int)GPUBackend::OPENGL;
-			SetGPUBackend((GPUBackend)g_Config.iGPUBackend);
-			delete ctx;
-			SDLGLGraphicsContext *glctx = new SDLGLGraphicsContext();
-			glctx->Init(window, x, y, mode, &error_message);
-			graphicsContext = glctx;
-		} else {
-			graphicsContext = ctx;
-		}
 	}
+	// else if (g_Config.iGPUBackend == (int)GPUBackend::VULKAN) {
+		// SDLVulkanGraphicsContext *ctx = new SDLVulkanGraphicsContext();
+		// if (!ctx->Init(window, x, y, mode, &error_message)) {
+			// printf("Vulkan init error '%s' - falling back to GL\n", error_message.c_str());
+			// g_Config.iGPUBackend = (int)GPUBackend::OPENGL;
+			// SetGPUBackend((GPUBackend)g_Config.iGPUBackend);
+			// delete ctx;
+			// SDLGLGraphicsContext *glctx = new SDLGLGraphicsContext();
+			// glctx->Init(window, x, y, mode, &error_message);
+			// graphicsContext = glctx;
+		// } else {
+			// graphicsContext = ctx;
+		// }
+	// }
 
 	bool useEmuThread = g_Config.iGPUBackend == (int)GPUBackend::OPENGL;
 
@@ -1167,7 +1232,7 @@ int main(int argc, char *argv[]) {
 	bcm_host_deinit();
 #endif
 
-	glslang::FinalizeProcess();
+	// glslang::FinalizeProcess();
 	ILOG("Leaving main");
 #ifdef HAVE_LIBNX
 	socketExit();

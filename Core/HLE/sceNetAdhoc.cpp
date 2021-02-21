@@ -256,7 +256,7 @@ static int sceNetAdhocPdpCreate(const char *mac, u32 port, int bufferSize, u32 u
 				//return ERROR_NET_ADHOC_PORT_IN_USE;
 
 				// Create Internet UDP Socket
-				int usocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+				int usocket = socket(AF_INET, SOCK_DGRAM, 17);
 				// Valid Socket produced
 				if (usocket != INVALID_SOCKET) {
 					// Change socket buffer size when necessary
@@ -1642,7 +1642,7 @@ static int sceNetAdhocPtpOpen(const char *srcmac, int sport, const char *dstmac,
 				// Valid Arguments
 				if (bufsize > 0 && rexmt_int > 0 && rexmt_cnt > 0) {
 					// Create Infrastructure Socket
-					int tcpsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+					int tcpsocket = socket(AF_INET, SOCK_STREAM, 6);
 					
 					// Valid Socket produced
 					if (tcpsocket > 0) {
@@ -2115,7 +2115,7 @@ static int sceNetAdhocPtpListen(const char *srcmac, int sport, int bufsize, int 
 				if (bufsize > 0 && rexmt_int > 0 && rexmt_cnt > 0 && backlog > 0)
 				{
 					// Create Infrastructure Socket
-					int tcpsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+					int tcpsocket = socket(AF_INET, SOCK_STREAM, 6);
 					
 					// Valid Socket produced
 					if (tcpsocket > 0) {

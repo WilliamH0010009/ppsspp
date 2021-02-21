@@ -1768,7 +1768,7 @@ void change_blocking_mode(int fd, int nonblocking)
 int create_listen_socket(uint16_t port)
 {
 	// Create Socket
-	int fd = (int)socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	int fd = (int)socket(AF_INET, SOCK_STREAM, 6);
 
 	// Created Socket
 	if(fd != -1)
@@ -1859,7 +1859,7 @@ int server_loop(int server)
 					u32_le sip = addr.sin_addr.s_addr;
 					if (sip == 0x0100007f) { //127.0.0.1 should be replaced with LAN/WAN IP whenever available
 						char str[100];
-						gethostname(str, 100);
+						// gethostname(str, 100);
 						u8 *pip = (u8*)&sip;
 						if (gethostbyname(str)->h_addrtype == AF_INET && gethostbyname(str)->h_addr_list[0] != NULL) pip = (u8*)gethostbyname(str)->h_addr_list[0];
 						sip = *(u32_le*)pip;

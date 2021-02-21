@@ -10,7 +10,7 @@
 #include <sys/types.h>
 #include <sys/vfs.h>
 #define statvfs statfs
-#else
+#elif !defined(VITA)
 #include <sys/statvfs.h>
 #endif
 #include <ctype.h>
@@ -28,7 +28,7 @@ bool free_disk_space(const std::string &dir, uint64_t &space) {
 		space = free.QuadPart;
 		return true;
 	}
-#else
+#elif !defined(VITA)
 	struct statvfs diskstat;
 	int res = statvfs(dir.c_str(), &diskstat);
 

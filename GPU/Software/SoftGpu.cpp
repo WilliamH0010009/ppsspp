@@ -75,11 +75,11 @@ SoftGPU::SoftGPU(GraphicsContext *gfxCtx, Draw::DrawContext *draw)
 		presentation_->SetLanguage(gl_extensions.IsCoreContext ? GLSL_300 : GLSL_140);
 		break;
 	case GPUBackend::DIRECT3D9:
-		ShaderTranslationInit();
+		// ShaderTranslationInit();
 		presentation_->SetLanguage(HLSL_DX9);
 		break;
 	case GPUBackend::DIRECT3D11:
-		ShaderTranslationInit();
+		// ShaderTranslationInit();
 		presentation_->SetLanguage(HLSL_D3D11);
 		break;
 	case GPUBackend::VULKAN:
@@ -113,7 +113,7 @@ SoftGPU::~SoftGPU() {
 	switch (GetGPUBackend()) {
 	case GPUBackend::DIRECT3D9:
 	case GPUBackend::DIRECT3D11:
-		ShaderTranslationShutdown();
+		// ShaderTranslationShutdown();
 		break;
 	case GPUBackend::OPENGL:
 	case GPUBackend::VULKAN:

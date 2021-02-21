@@ -44,7 +44,7 @@ void Shutdown()
 }
 
 bool DNSResolve(const std::string &host, const std::string &service, addrinfo **res, std::string &error, DNSType type) {
-#if PPSSPP_PLATFORM(SWITCH)
+#if PPSSPP_PLATFORM(SWITCH) || PPSSPP_PLATFORM(VITA)
 	// Force IPv4 lookups.
 	if (type == DNSType::IPV6) {
 		*res = nullptr;
@@ -81,10 +81,12 @@ bool DNSResolve(const std::string &host, const std::string &service, addrinfo **
 	}
 
 	if (result != 0) {
+#if !PPSSPP_PLATFORM(VITA)
 #ifdef _WIN32
 		error = gai_strerrorA(result);
 #else
 		error = gai_strerror(result);
+#endif
 #endif
 		if (*res != nullptr)
 			freeaddrinfo(*res);

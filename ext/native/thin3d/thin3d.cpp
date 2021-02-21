@@ -104,19 +104,13 @@ bool RefCountedObject::ReleaseAssertLast() {
 
 static const std::vector<ShaderSource> fsTexCol = {
 	{ShaderLanguage::GLSL_ES_200,
-	"#ifdef GL_ES\n"
-	"precision lowp float;\n"
-	"#endif\n"
-	"#if __VERSION__ >= 130\n"
-	"#define varying in\n"
-	"#define texture2D texture\n"
-	"#define gl_FragColor fragColor0\n"
-	"out vec4 fragColor0;\n"
-	"#endif\n"
-	"varying vec4 oColor0;\n"
-	"varying vec2 oTexCoord0;\n"
-	"uniform sampler2D Sampler0;\n"
-	"void main() { gl_FragColor = texture2D(Sampler0, oTexCoord0) * oColor0; }\n"
+	"float4 main(\n"
+	"  float4 oColor0 : COLOR0,\n"
+	"  float2 oTexCoord0 : TEXCOORD0,\n"
+	"  uniform sampler2D Sampler0\n"
+	") {\n"
+	"  return oColor0 * tex2D(Sampler0, oTexCoord0);\n"
+	"}\n"
 	},
 	{ShaderLanguage::HLSL_D3D9,
 	"struct PS_INPUT { float4 color : COLOR0; float2 uv : TEXCOORD0; };\n"
@@ -148,19 +142,13 @@ static const std::vector<ShaderSource> fsTexCol = {
 
 static const std::vector<ShaderSource> fsTexColRBSwizzle = {
 	{ShaderLanguage::GLSL_ES_200,
-	"#ifdef GL_ES\n"
-	"precision lowp float;\n"
-	"#endif\n"
-	"#if __VERSION__ >= 130\n"
-	"#define varying in\n"
-	"#define texture2D texture\n"
-	"#define gl_FragColor fragColor0\n"
-	"out vec4 fragColor0;\n"
-	"#endif\n"
-	"varying vec4 oColor0;\n"
-	"varying vec2 oTexCoord0;\n"
-	"uniform sampler2D Sampler0;\n"
-	"void main() { gl_FragColor = texture2D(Sampler0, oTexCoord0).zyxw * oColor0; }\n"
+	"float4 main(\n"
+	"  float4 oColor0 : COLOR0,\n"
+	"  float2 oTexCoord0 : TEXCOORD0,\n"
+	"  uniform sampler2D Sampler0\n"
+	") {\n"
+	"  return oColor0 * tex2D(Sampler0, oTexCoord0).zyxw;\n"
+	"}\n"
 	},
 	{ShaderLanguage::HLSL_D3D9,
 	"struct PS_INPUT { float4 color : COLOR0; float2 uv : TEXCOORD0; };\n"
@@ -191,17 +179,12 @@ static const std::vector<ShaderSource> fsTexColRBSwizzle = {
 };
 
 static const std::vector<ShaderSource> fsCol = {
-	{ ShaderLanguage::GLSL_ES_200,
-	"#ifdef GL_ES\n"
-	"precision lowp float;\n"
-	"#endif\n"
-	"#if __VERSION__ >= 130\n"
-	"#define varying in\n"
-	"#define gl_FragColor fragColor0\n"
-	"out vec4 fragColor0;\n"
-	"#endif\n"
-	"varying vec4 oColor0;\n"
-	"void main() { gl_FragColor = oColor0; }\n"
+	{ShaderLanguage::GLSL_ES_200,
+	"float4 main(\n"
+	"  float4 oColor0 : COLOR0\n"
+	") {\n"
+	"  return oColor0;\n"
+	"}\n"
 	},
 	{ ShaderLanguage::HLSL_D3D9,
 	"struct PS_INPUT { float4 color : COLOR0; };\n"
@@ -229,17 +212,14 @@ static const std::vector<ShaderSource> fsCol = {
 
 static const std::vector<ShaderSource> vsCol = {
 	{ ShaderLanguage::GLSL_ES_200,
-	"#if __VERSION__ >= 130\n"
-	"#define attribute in\n"
-	"#define varying out\n"
-	"#endif\n"
-	"attribute vec3 Position;\n"
-	"attribute vec4 Color0;\n"
-	"varying vec4 oColor0;\n"
-
-	"uniform mat4 WorldViewProj;\n"
-	"void main() {\n"
-	"  gl_Position = WorldViewProj * vec4(Position, 1.0);\n"
+	"void main(\n"
+	"  float3 Position,\n"
+	"  float4 Color0,\n"
+	"  float4 out gl_Position : POSITION,\n"
+	"  float4 out oColor0 : COLOR0,\n"
+	"  uniform float4x4 WorldViewProj\n"
+	") {\n"
+	"  gl_Position = mul(float4(Position, 1.0), WorldViewProj);\n"
 	"  oColor0 = Color0;\n"
 	"}"
 	},
@@ -291,18 +271,16 @@ const UniformBufferDesc vsColBufDesc { sizeof(VsColUB), {
 
 static const std::vector<ShaderSource> vsTexCol = {
 	{ ShaderLanguage::GLSL_ES_200,
-	"#if __VERSION__ >= 130\n"
-	"#define attribute in\n"
-	"#define varying out\n"
-	"#endif\n"
-	"attribute vec3 Position;\n"
-	"attribute vec4 Color0;\n"
-	"attribute vec2 TexCoord0;\n"
-	"varying vec4 oColor0;\n"
-	"varying vec2 oTexCoord0;\n"
-	"uniform mat4 WorldViewProj;\n"
-	"void main() {\n"
-	"  gl_Position = WorldViewProj * vec4(Position, 1.0);\n"
+	"void main(\n"
+	"  float3 Position,\n"
+	"  float4 Color0,\n"
+	"  float2 TexCoord0,\n"
+	"  float4 out gl_Position : POSITION,\n"
+	"  float2 out oTexCoord0 : TEXCOORD0,\n"
+	"  float4 out oColor0 : COLOR0,\n"
+	"  uniform float4x4 WorldViewProj\n"
+	") {\n"
+	"  gl_Position = mul(float4(Position, 1.0), WorldViewProj);\n"
 	"  oColor0 = Color0;\n"
 	"  oTexCoord0 = TexCoord0;\n"
 	"}\n"

@@ -89,7 +89,7 @@ bool Connection::Connect(int maxTries, double timeout, bool *cancelConnect) {
 			if (possible->ai_family != AF_INET && possible->ai_family != AF_INET6)
 				continue;
 
-			int sock = socket(possible->ai_family, SOCK_STREAM, IPPROTO_TCP);
+			int sock = socket(possible->ai_family, SOCK_STREAM, 6);
 			if ((intptr_t)sock == -1) {
 				ELOG("Bad socket");
 				continue;

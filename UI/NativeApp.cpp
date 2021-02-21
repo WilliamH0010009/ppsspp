@@ -333,6 +333,8 @@ static void PostLoadConfig() {
 		g_Config.currentDirectory = g_Config.internalDataDirectory;
 #elif PPSSPP_PLATFORM(SWITCH)
 		g_Config.currentDirectory = "/";
+#elif PPSSPP_PLATFORM(VITA)
+		g_Config.currentDirectory = "ux0:/data/ppsspp/";
 #else
 		if (getenv("HOME") != nullptr)
 			g_Config.currentDirectory = getenv("HOME");
@@ -465,7 +467,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	// Packed assets are included in app
 	VFSRegister("", new DirectoryAssetReader(external_dir));
 #endif
-#if !defined(MOBILE_DEVICE) && !defined(_WIN32) && !PPSSPP_PLATFORM(SWITCH)
+#if !defined(MOBILE_DEVICE) && !defined(_WIN32) && !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 	VFSRegister("", new DirectoryAssetReader((File::GetExeDirectory() + "assets/").c_str()));
 	VFSRegister("", new DirectoryAssetReader((File::GetExeDirectory()).c_str()));
 	VFSRegister("", new DirectoryAssetReader("/usr/local/share/ppsspp/assets/"));
@@ -473,7 +475,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 	VFSRegister("", new DirectoryAssetReader("/usr/share/ppsspp/assets/"));
 	VFSRegister("", new DirectoryAssetReader("/usr/share/games/ppsspp/assets/"));
 #endif
-#if PPSSPP_PLATFORM(SWITCH)
+#if PPSSPP_PLATFORM(SWITCH) || PPSSPP_PLATFORM(VITA)
 	std::string assetPath = user_data_path + "assets/";
 	VFSRegister("", new DirectoryAssetReader(assetPath.c_str()));
 #else
@@ -508,7 +510,7 @@ void NativeInit(int argc, const char *argv[], const char *savegame_dir, const ch
 #elif defined(IOS)
 	g_Config.memStickDirectory = user_data_path;
 	g_Config.flash0Directory = std::string(external_dir) + "/flash0/";
-#elif PPSSPP_PLATFORM(SWITCH)
+#elif PPSSPP_PLATFORM(SWITCH) || PPSSPP_PLATFORM(VITA)
 	g_Config.memStickDirectory = g_Config.internalDataDirectory + "config/ppsspp/";
 	g_Config.flash0Directory = g_Config.internalDataDirectory + "assets/flash0/";
 #elif !defined(_WIN32)

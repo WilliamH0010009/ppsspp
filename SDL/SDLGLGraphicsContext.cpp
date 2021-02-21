@@ -22,7 +22,7 @@ static EGLContext               g_eglContext    = nullptr;
 static EGLSurface               g_eglSurface    = nullptr;
 static EGLNativeDisplayType     g_Display       = nullptr;
 static bool                     g_XDisplayOpen  = false;
-static EGLNativeWindowType      g_Window        = (EGLNativeWindowType)nullptr;
+static EGLNativeWindowType      g_Window        = (EGLNativeWindowType)0;
 static bool useEGLSwap = false;
 
 int CheckEGLErrors(const char *file, int line) {
@@ -73,9 +73,9 @@ static bool EGL_OpenInit() {
 }
 
 static int8_t EGL_Open(SDL_Window *window) {
-#if defined(USING_FBDEV)
-	g_Display = (EGLNativeDisplayType)nullptr;
-	g_Window = (EGLNativeWindowType)nullptr;
+#if defined(USING_FBDEV) || defined(VITA)
+	g_Display = (EGLNativeDisplayType)0;
+	g_Window = (EGLNativeWindowType)VITA_WINDOW_960X544;
 #elif defined(__APPLE__)
 	g_Display = (EGLNativeDisplayType)XOpenDisplay(nullptr);
 	g_XDisplayOpen = g_Display != nullptr;
@@ -282,7 +282,7 @@ void EGL_Close() {
 		g_eglDisplay = EGL_NO_DISPLAY;
 	}
 	if (g_Display != nullptr) {
-#if !defined(USING_FBDEV)
+#if !defined(USING_FBDEV) && !defined(VITA)
 		if (g_XDisplayOpen)
 			XCloseDisplay((Display *)g_Display);
 #endif
@@ -297,6 +297,7 @@ void EGL_Close() {
 
 // Returns 0 on success.
 int SDLGLGraphicsContext::Init(SDL_Window *&window, int x, int y, int mode, std::string *error_message) {
+#ifndef VITA
 	struct GLVersionPair {
 		int major;
 		int minor;
@@ -370,6 +371,13 @@ int SDLGLGraphicsContext::Init(SDL_Window *&window, int x, int y, int mode, std:
 			return 2;
 		}
 	}
+#else
+	window = SDL_CreateWindow("PPSSPP", x, y, pixel_xres, pixel_yres, mode);
+	if (!window) {
+		// Definitely don't shutdown here: we'll keep trying more GL versions.
+		fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+	}
+#endif
 
 	// At this point, we have a window that we can show finally.
 	SDL_ShowWindow(window);

@@ -40,26 +40,14 @@
 
 static const char * const boneWeightAttrDecl[9] = {
 	"#ERROR#",
-	"attribute mediump float w1;\n",
-	"attribute mediump vec2 w1;\n",
-	"attribute mediump vec3 w1;\n",
-	"attribute mediump vec4 w1;\n",
-	"attribute mediump vec4 w1;\nattribute mediump float w2;\n",
-	"attribute mediump vec4 w1;\nattribute mediump vec2 w2;\n",
-	"attribute mediump vec4 w1;\nattribute mediump vec3 w2;\n",
-	"attribute mediump vec4 w1, w2;\n",
-};
-
-static const char * const boneWeightInDecl[9] = {
-	"#ERROR#",
-	"in mediump float w1;\n",
-	"in mediump vec2 w1;\n",
-	"in mediump vec3 w1;\n",
-	"in mediump vec4 w1;\n",
-	"in mediump vec4 w1;\nin mediump float w2;\n",
-	"in mediump vec4 w1;\nin mediump vec2 w2;\n",
-	"in mediump vec4 w1;\nin mediump vec3 w2;\n",
-	"in mediump vec4 w1, w2;\n",
+	"float w1,\n",
+	"float2 w1,\n",
+	"float3 w1,\n",
+	"float4 w1,\n",
+	"float4 w1,\nfloat w2,\n",
+	"float4 w1,\nfloat2 w2,\n",
+	"float4 w1,\nfloat3 w2,\n",
+	"float4 w1,\nfloat4 w2,\n",
 };
 
 enum DoLightComputation {
@@ -105,65 +93,8 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 	*uniformMask = 0;
 	// #define USE_FOR_LOOP
 
-	// In GLSL ES 3.0, you use "out" variables instead.
-	bool glslES30 = false;
-	const char *varying = "varying";
-	const char *attribute = "attribute";
 	const char * const * boneWeightDecl = boneWeightAttrDecl;
 	const char *texelFetch = NULL;
-	bool highpFog = false;
-	bool highpTexcoord = false;
-
-	if (gl_extensions.IsGLES) {
-		if (gstate_c.Supports(GPU_SUPPORTS_GLSL_ES_300)) {
-			WRITE(p, "#version 300 es\n");
-			glslES30 = true;
-			texelFetch = "texelFetch";
-		} else {
-			WRITE(p, "#version 100\n");  // GLSL ES 1.0
-			if (gl_extensions.EXT_gpu_shader4) {
-				WRITE(p, "#extension GL_EXT_gpu_shader4 : enable\n");
-				texelFetch = "texelFetch2D";
-			}
-		}
-		WRITE(p, "precision highp float;\n");
-
-		// PowerVR needs highp to do the fog in MHU correctly.
-		// Others don't, and some can't handle highp in the fragment shader.
-		highpFog = (gl_extensions.bugs & BUG_PVR_SHADER_PRECISION_BAD) ? true : false;
-		highpTexcoord = highpFog;
-	} else {
-		if (!gl_extensions.ForceGL2 || gl_extensions.IsCoreContext) {
-			if (gl_extensions.VersionGEThan(3, 3, 0)) {
-				glslES30 = true;
-				WRITE(p, "#version 330\n");
-				texelFetch = "texelFetch";
-			} else if (gl_extensions.VersionGEThan(3, 0, 0)) {
-				WRITE(p, "#version 130\n");
-				if (gl_extensions.EXT_gpu_shader4) {
-					WRITE(p, "#extension GL_EXT_gpu_shader4 : enable\n");
-					texelFetch = "texelFetch";
-				}
-			} else {
-				WRITE(p, "#version 110\n");
-				if (gl_extensions.EXT_gpu_shader4) {
-					WRITE(p, "#extension GL_EXT_gpu_shader4 : enable\n");
-					texelFetch = "texelFetch2D";
-				}
-			}
-		}
-
-		// We remove these everywhere - GL4, GL3, Mac-forced-GL2, etc.
-		WRITE(p, "#define lowp\n");
-		WRITE(p, "#define mediump\n");
-		WRITE(p, "#define highp\n");
-	}
-
-	if (glslES30 || gl_extensions.IsCoreContext) {
-		attribute = "in";
-		varying = "out";
-		boneWeightDecl = boneWeightInDecl;
-	}
 
 	bool isModeThrough = id.Bit(VS_BIT_IS_THROUGH);
 	bool lmode = id.Bit(VS_BIT_LMODE);
@@ -196,10 +127,6 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 	bool hasNormalTess = id.Bit(VS_BIT_HAS_NORMAL_TESS);
 	bool flipNormalTess = id.Bit(VS_BIT_NORM_REVERSE_TESS);
 
-	const char *shading = "";
-	if (glslES30)
-		shading = doFlatShading ? "flat " : "";
-
 	DoLightComputation doLight[4] = { LIGHT_OFF, LIGHT_OFF, LIGHT_OFF, LIGHT_OFF };
 	if (useHWTransform) {
 		int shadeLight0 = doShadeMapping ? ls0 : -1;
@@ -212,6 +139,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		}
 	}
 
+	// TODO(theflow): need to figure out proper order of bones.
 	int numBoneWeights = 0;
 	int boneWeightScale = id.Bits(VS_BIT_WEIGHT_FMTSCALE, 2);
 	if (enableBones) {
@@ -222,41 +150,43 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			*attrMask |= 1 << ATTR_W2;
 	}
 
+	WRITE(p, "void main(\n");
+
 	if (useHWTransform)
-		WRITE(p, "%s vec3 position;\n", attribute);
+		WRITE(p, "  float3 position,\n");
 	else
-		WRITE(p, "%s vec4 position;\n", attribute);  // need to pass the fog coord in w
+		WRITE(p, "  float4 position,\n");  // need to pass the fog coord in w
 	*attrMask |= 1 << ATTR_POSITION;
 
 	if (useHWTransform && hasNormal) {
-		WRITE(p, "%s mediump vec3 normal;\n", attribute);
+		WRITE(p, "  float3 normal,\n");
 		*attrMask |= 1 << ATTR_NORMAL;
 	}
 
 	bool texcoordVec3In = false;
 	if (doTexture && hasTexcoord) {
 		if (!useHWTransform && doTextureProjection && !isModeThrough) {
-			WRITE(p, "%s vec3 texcoord;\n", attribute);
+			WRITE(p, "  float3 texcoord,\n");
 			texcoordVec3In = true;
 		} else {
-			WRITE(p, "%s vec2 texcoord;\n", attribute);
+			WRITE(p, "  float2 texcoord,\n");
 		}
 		*attrMask |= 1 << ATTR_TEXCOORD;
 	}
 	if (hasColor) {
-		WRITE(p, "%s lowp vec4 color0;\n", attribute);
+		WRITE(p, "  float4 color0,\n");
 		*attrMask |= 1 << ATTR_COLOR0;
 		if (lmode && !useHWTransform) { // only software transform supplies color1 as vertex data
-			WRITE(p, "%s lowp vec3 color1;\n", attribute);
+			WRITE(p, "  float3 color1,\n");
 			*attrMask |= 1 << ATTR_COLOR1;
 		}
 	}
 
 	if (isModeThrough) {
-		WRITE(p, "uniform mat4 u_proj_through;\n");
+		WRITE(p, "  uniform float4x4 u_proj_through,\n");
 		*uniformMask |= DIRTY_PROJTHROUGHMATRIX;
 	} else {
-		WRITE(p, "uniform mat4 u_proj;\n");
+		WRITE(p, "  uniform float4x4 u_proj,\n");
 		*uniformMask |= DIRTY_PROJMATRIX;
 		// Add all the uniforms we'll need to transform properly.
 	}
@@ -265,32 +195,32 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 
 	if (useHWTransform) {
 		// When transforming by hardware, we need a great deal more uniforms...
-		WRITE(p, "uniform mat4 u_world;\n");
-		WRITE(p, "uniform mat4 u_view;\n");
+		WRITE(p, "  uniform float4x4 u_world,\n");
+		WRITE(p, "  uniform float4x4 u_view,\n");
 		*uniformMask |= DIRTY_WORLDMATRIX | DIRTY_VIEWMATRIX;
 		if (doTextureProjection) {
-			WRITE(p, "uniform mediump mat4 u_texmtx;\n");
+			WRITE(p, "  uniform float4x4 u_texmtx,\n");
 			*uniformMask |= DIRTY_TEXMATRIX;
 		}
 		if (enableBones) {
 #ifdef USE_BONE_ARRAY
-			WRITE(p, "uniform mediump mat4 u_bone[%i];\n", numBoneWeights);
+			WRITE(p, "  uniform float4x4 u_bone[%i],\n", numBoneWeights);
 			*uniformMask |= DIRTY_BONE_UNIFORMS;
 #else
 			for (int i = 0; i < numBoneWeights; i++) {
-				WRITE(p, "uniform mat4 u_bone%i;\n", i);
+				WRITE(p, "  uniform float4x4 u_bone%i,\n", i);
 				*uniformMask |= DIRTY_BONEMATRIX0 << i;
 			}
 #endif
 		}
 		if (doTexture) {
-			WRITE(p, "uniform vec4 u_uvscaleoffset;\n");
+			WRITE(p, "  uniform float4 u_uvscaleoffset,\n");
 			*uniformMask |= DIRTY_UVSCALEOFFSET;
 		}
 		for (int i = 0; i < 4; i++) {
 			if (doLight[i] != LIGHT_OFF) {
 				// This is needed for shade mapping
-				WRITE(p, "uniform vec3 u_lightpos%i;\n", i);
+				WRITE(p, "  uniform float3 u_lightpos%i,\n", i);
 				*uniformMask |= DIRTY_LIGHT0 << i;
 			}
 			if (doLight[i] == LIGHT_FULL) {
@@ -299,83 +229,81 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				GELightComputation comp = static_cast<GELightComputation>(id.Bits(VS_BIT_LIGHT0_COMP + 4 * i, 2));
 
 				if (type != GE_LIGHTTYPE_DIRECTIONAL)
-					WRITE(p, "uniform mediump vec3 u_lightatt%i;\n", i);
+					WRITE(p, "  uniform float3 u_lightatt%i,\n", i);
 
 				if (type == GE_LIGHTTYPE_SPOT || type == GE_LIGHTTYPE_UNKNOWN) {
-					WRITE(p, "uniform mediump vec3 u_lightdir%i;\n", i);
-					WRITE(p, "uniform mediump vec2 u_lightangle_spotCoef%i;\n", i);
+					WRITE(p, "  uniform float3 u_lightdir%i,\n", i);
+					WRITE(p, "  uniform float2 u_lightangle_spotCoef%i,\n", i);
 				}
-				WRITE(p, "uniform lowp vec3 u_lightambient%i;\n", i);
-				WRITE(p, "uniform lowp vec3 u_lightdiffuse%i;\n", i);
+				WRITE(p, "  uniform float3 u_lightambient%i,\n", i);
+				WRITE(p, "  uniform float3 u_lightdiffuse%i,\n", i);
 
 				if (comp == GE_LIGHTCOMP_BOTH) {
-					WRITE(p, "uniform lowp vec3 u_lightspecular%i;\n", i);
+					WRITE(p, "  uniform float3 u_lightspecular%i,\n", i);
 				}
 			}
 		}
 		if (enableLighting) {
-			WRITE(p, "uniform lowp vec4 u_ambient;\n");
+			WRITE(p, "  uniform float4 u_ambient,\n");
 			*uniformMask |= DIRTY_AMBIENT;
 			if ((matUpdate & 2) == 0 || !hasColor) {
-				WRITE(p, "uniform lowp vec3 u_matdiffuse;\n");
+				WRITE(p, "  uniform float3 u_matdiffuse,\n");
 				*uniformMask |= DIRTY_MATDIFFUSE;
 			}
-			WRITE(p, "uniform lowp vec4 u_matspecular;\n");  // Specular coef is contained in alpha
-			WRITE(p, "uniform lowp vec3 u_matemissive;\n");
+			WRITE(p, "  uniform float4 u_matspecular,\n");  // Specular coef is contained in alpha
+			WRITE(p, "  uniform float3 u_matemissive,\n");
 			*uniformMask |= DIRTY_MATSPECULAR | DIRTY_MATEMISSIVE;
 		}
 	}
 
 	if (useHWTransform || !hasColor) {
-		WRITE(p, "uniform lowp vec4 u_matambientalpha;\n");  // matambient + matalpha
+		WRITE(p, "  uniform float4 u_matambientalpha,\n");  // matambient + matalpha
 		*uniformMask |= DIRTY_MATAMBIENTALPHA;
 	}
 	if (enableFog) {
-		WRITE(p, "uniform highp vec2 u_fogcoef;\n");
+		WRITE(p, "  uniform float2 u_fogcoef,\n");
 		*uniformMask |= DIRTY_FOGCOEF;
 	}
 
 	if (!isModeThrough && gstate_c.Supports(GPU_ROUND_DEPTH_TO_16BIT)) {
-		WRITE(p, "uniform highp vec4 u_depthRange;\n");
+		WRITE(p, "  uniform float4 u_depthRange,\n");
 		*uniformMask |= DIRTY_DEPTHRANGE;
 	}
 
 	if (!isModeThrough) {
-		WRITE(p, "uniform highp vec4 u_cullRangeMin;\n");
-		WRITE(p, "uniform highp vec4 u_cullRangeMax;\n");
+		WRITE(p, "  uniform float4 u_cullRangeMin,\n");
+		WRITE(p, "  uniform float4 u_cullRangeMax,\n");
 		*uniformMask |= DIRTY_CULLRANGE;
 	}
 
-	WRITE(p, "%s%s lowp vec4 v_color0;\n", shading, varying);
+	WRITE(p, "  float4 out v_color0 : COLOR0,\n");
 	if (lmode) {
-		WRITE(p, "%s%s lowp vec3 v_color1;\n", shading, varying);
+		WRITE(p, "  float3 out v_color1 : COLOR1,\n");
 	}
 
 	if (doTexture) {
-		WRITE(p, "%s %s vec3 v_texcoord;\n", varying, highpTexcoord ? "highp" : "mediump");
+		WRITE(p, "  float3 out v_texcoord : TEXCOORD0,\n");
 	}
 
 	if (enableFog) {
 		// See the fragment shader generator
-		if (highpFog) {
-			WRITE(p, "%s highp float v_fogdepth;\n", varying);
-		} else {
-			WRITE(p, "%s mediump float v_fogdepth;\n", varying);
-		}
+		WRITE(p, "  float out v_fogdepth : TEXCOORD1,\n");
 	}
 
+	// TODO(theflow): move this away
 	// See comment above this function (GenerateVertexShader).
 	if (!isModeThrough && gstate_c.Supports(GPU_ROUND_DEPTH_TO_16BIT)) {
 		// Apply the projection and viewport to get the Z buffer value, floor to integer, undo the viewport and projection.
-		WRITE(p, "\nvec4 depthRoundZVP(vec4 v) {\n");
+		WRITE(p, "\nvec4 depthRoundZVP(float4 v) {\n");
 		WRITE(p, "  float z = v.z / v.w;\n");
 		WRITE(p, "  z = z * u_depthRange.x + u_depthRange.y;\n");
 		WRITE(p, "  z = floor(z);\n");
 		WRITE(p, "  z = (z - u_depthRange.z) * u_depthRange.w;\n");
-		WRITE(p, "  return vec4(v.x, v.y, z * v.w, v.w);\n");
+		WRITE(p, "  return float4(v.x, v.y, z * v.w, v.w);\n");
 		WRITE(p, "}\n\n");
 	}
 
+	// TODO(theflow): move this away
 	// Hardware tessellation
 	if (doBezier || doSpline) {
 		*uniformMask |= DIRTY_BEZIERSPLINE;
@@ -387,8 +315,8 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		WRITE(p, "uniform int u_spline_counts;\n");
 
 		for (int i = 2; i <= 4; i++) {
-			// Define 3 types vec2, vec3, vec4
-			WRITE(p, "vec%d tess_sample(in vec%d points[16], mat4 weights) {\n", i, i);
+			// Define 3 types float2, float3, float4
+			WRITE(p, "vec%d tess_sample(in vec%d points[16], float4x4 weights) {\n", i, i);
 			WRITE(p, "  vec%d pos = vec%d(0.0);\n", i, i);
 			for (int v = 0; v < 4; ++v) {
 				for (int u = 0; u < 4; ++u) {
@@ -400,18 +328,18 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		}
 
 		if (!gl_extensions.VersionGEThan(3, 0, 0)) { // For glsl version 1.10
-			WRITE(p, "mat4 outerProduct(vec4 u, vec4 v) {\n");
-			WRITE(p, "  return mat4(u * v[0], u * v[1], u * v[2], u * v[3]);\n");
+			WRITE(p, "float4x4 outerProduct(float4 u, float4 v) {\n");
+			WRITE(p, "  return float4x4(u * v[0], u * v[1], u * v[2], u * v[3]);\n");
 			WRITE(p, "}\n");
 		}
 
 		WRITE(p, "struct Tess {\n");
-		WRITE(p, "  vec3 pos;\n");
+		WRITE(p, "  float3 pos;\n");
 		if (doTexture)
-			WRITE(p, "  vec2 tex;\n");
-		WRITE(p, "  vec4 col;\n");
+			WRITE(p, "  float2 tex;\n");
+		WRITE(p, "  float4 col;\n");
 		if (hasNormalTess)
-			WRITE(p, "  vec3 nrm;\n");
+			WRITE(p, "  float3 nrm;\n");
 		WRITE(p, "};\n");
 
 		WRITE(p, "void tessellate(out Tess tess) {\n");
@@ -419,9 +347,9 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		WRITE(p, "  ivec2 weight_idx = ivec2(position.xy);\n");
 
 		// Load 4x4 control points
-		WRITE(p, "  vec3 _pos[16];\n");
-		WRITE(p, "  vec2 _tex[16];\n");
-		WRITE(p, "  vec4 _col[16];\n");
+		WRITE(p, "  float3 _pos[16];\n");
+		WRITE(p, "  float2 _tex[16];\n");
+		WRITE(p, "  float4 _col[16];\n");
 		WRITE(p, "  int index_u, index_v;\n");
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < 4; j++) {
@@ -436,9 +364,9 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		}
 
 		// Basis polynomials as weight coefficients
-		WRITE(p, "  vec4 basis_u = %s(u_tess_weights_u, %s, 0);\n", texelFetch, "ivec2(weight_idx.x * 2, 0)");
-		WRITE(p, "  vec4 basis_v = %s(u_tess_weights_v, %s, 0);\n", texelFetch, "ivec2(weight_idx.y * 2, 0)");
-		WRITE(p, "  mat4 basis = outerProduct(basis_u, basis_v);\n");
+		WRITE(p, "  float4 basis_u = %s(u_tess_weights_u, %s, 0);\n", texelFetch, "ivec2(weight_idx.x * 2, 0)");
+		WRITE(p, "  float4 basis_v = %s(u_tess_weights_v, %s, 0);\n", texelFetch, "ivec2(weight_idx.y * 2, 0)");
+		WRITE(p, "  float4x4 basis = outerProduct(basis_u, basis_v);\n");
 
 		// Tessellate
 		WRITE(p, "  tess.pos = tess_sample(_pos, basis);\n");
@@ -454,17 +382,19 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			WRITE(p, "  tess.col = u_matambientalpha;\n");
 		if (hasNormalTess) {
 			// Derivatives as weight coefficients
-			WRITE(p, "  vec4 deriv_u = %s(u_tess_weights_u, %s, 0);\n", texelFetch, "ivec2(weight_idx.x * 2 + 1, 0)");
-			WRITE(p, "  vec4 deriv_v = %s(u_tess_weights_v, %s, 0);\n", texelFetch, "ivec2(weight_idx.y * 2 + 1, 0)");
+			WRITE(p, "  float4 deriv_u = %s(u_tess_weights_u, %s, 0);\n", texelFetch, "ivec2(weight_idx.x * 2 + 1, 0)");
+			WRITE(p, "  float4 deriv_v = %s(u_tess_weights_v, %s, 0);\n", texelFetch, "ivec2(weight_idx.y * 2 + 1, 0)");
 
-			WRITE(p, "  vec3 du = tess_sample(_pos, outerProduct(deriv_u, basis_v));\n");
-			WRITE(p, "  vec3 dv = tess_sample(_pos, outerProduct(basis_u, deriv_v));\n");
+			WRITE(p, "  float3 du = tess_sample(_pos, outerProduct(deriv_u, basis_v));\n");
+			WRITE(p, "  float3 dv = tess_sample(_pos, outerProduct(basis_u, deriv_v));\n");
 			WRITE(p, "  tess.nrm = normalize(cross(du, dv));\n");
 		}
 		WRITE(p, "}\n");
 	}
 
-	WRITE(p, "void main() {\n");
+	WRITE(p, "  float4 out gl_Position : POSITION\n");
+
+	WRITE(p, ") {\n");
 
 	if (!useHWTransform) {
 		// Simple pass-through of vertex data to fragment shader
@@ -472,7 +402,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			if (texcoordVec3In) {
 				WRITE(p, "  v_texcoord = texcoord;\n");
 			} else {
-				WRITE(p, "  v_texcoord = vec3(texcoord, 1.0);\n");
+				WRITE(p, "  v_texcoord = float3(texcoord, 1.0);\n");
 			}
 		}
 		if (hasColor) {
@@ -482,19 +412,19 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		} else {
 			WRITE(p, "  v_color0 = u_matambientalpha;\n");
 			if (lmode)
-				WRITE(p, "  v_color1 = vec3(0.0);\n");
+				WRITE(p, "  v_color1 = float3(0.0);\n");
 		}
 		if (enableFog) {
 			WRITE(p, "  v_fogdepth = position.w;\n");
 		}
 		if (isModeThrough)	{
-			WRITE(p, "  vec4 outPos = u_proj_through * vec4(position.xyz, 1.0);\n");
+			WRITE(p, "  float4 outPos = mul(float4(position.xyz, 1.0), u_proj_through);\n");
 		} else {
 			// The viewport is used in this case, so need to compensate for that.
 			if (gstate_c.Supports(GPU_ROUND_DEPTH_TO_16BIT)) {
-				WRITE(p, "  vec4 outPos = depthRoundZVP(u_proj * vec4(position.xyz, 1.0));\n");
+				WRITE(p, "  float4 outPos = depthRoundZVP(mul(float4(position.xyz, 1.0), u_proj));\n");
 			} else {
-				WRITE(p, "  vec4 outPos = u_proj * vec4(position.xyz, 1.0);\n");
+				WRITE(p, "  float4 outPos = mul(float4(position.xyz, 1.0), u_proj);\n");
 			}
 		}
 	} else {
@@ -505,19 +435,19 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				WRITE(p, "  Tess tess;\n");
 				WRITE(p, "  tessellate(tess);\n");
 
-				WRITE(p, "  vec3 worldpos = (u_world * vec4(tess.pos.xyz, 1.0)).xyz;\n");
+				WRITE(p, "  float3 worldpos = mul(float4(tess.pos.xyz, 1.0), u_world).xyz;\n");
 				if (hasNormalTess) {
-					WRITE(p, "  mediump vec3 worldnormal = normalize((u_world * vec4(%stess.nrm, 0.0)).xyz);\n", flipNormalTess ? "-" : "");
+					WRITE(p, "  float3 worldnormal = normalize(mul(float4(%stess.nrm, 0.0), u_world).xyz);\n", flipNormalTess ? "-" : "");
 				} else {
-					WRITE(p, "  mediump vec3 worldnormal = vec3(0.0, 0.0, 1.0);\n");
+					WRITE(p, "  float3 worldnormal = float3(0.0, 0.0, 1.0);\n");
 				}
 			} else {
 				// No skinning, just standard T&L.
-				WRITE(p, "  vec3 worldpos = (u_world * vec4(position.xyz, 1.0)).xyz;\n");
+				WRITE(p, "  float3 worldpos = mul(float4(position.xyz, 1.0), u_world).xyz;\n");
 				if (hasNormal)
-					WRITE(p, "  mediump vec3 worldnormal = normalize((u_world * vec4(%snormal, 0.0)).xyz);\n", flipNormal ? "-" : "");
+					WRITE(p, "  float3 worldnormal = normalize(mul(float4(%snormal, 0.0), u_world).xyz);\n", flipNormal ? "-" : "");
 				else
-					WRITE(p, "  mediump vec3 worldnormal = vec3(0.0, 0.0, 1.0);\n");
+					WRITE(p, "  float3 worldnormal = float3(0.0, 0.0, 1.0);\n");
 			}
 		} else {
 			static const char *rescale[4] = {"", " * 1.9921875", " * 1.999969482421875", ""}; // 2*127.5f/128.f, 2*32767.5f/32768.f, 1.0f};
@@ -543,7 +473,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			case 8: WRITE(p, "  float w[8]; w[0] = w1.x; w[1] = w1.y; w[2] = w1.z; w[3] = w1.w; w[4] = w2.x; w[5] = w2.y; w[6] = w2.z; w[7] = w2.w;\n"); break;
 			}
 
-			WRITE(p, "  mat4 skinMatrix = w[0] * u_bone[0];\n");
+			WRITE(p, "  float4x4 skinMatrix = w[0] * u_bone[0];\n");
 			if (numBoneWeights > 1) {
 				WRITE(p, "  for (int i = 1; i < %i; i++) {\n", numBoneWeights);
 				WRITE(p, "    skinMatrix += w[i] * u_bone[i];\n");
@@ -554,9 +484,9 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 
 #ifdef USE_BONE_ARRAY
 			if (numBoneWeights == 1)
-				WRITE(p, "  mat4 skinMatrix = w1 * u_bone[0]");
+				WRITE(p, "  float4x4 skinMatrix = w1 * u_bone[0]");
 			else
-				WRITE(p, "  mat4 skinMatrix = w1.x * u_bone[0]");
+				WRITE(p, "  float4x4 skinMatrix = w1.x * u_bone[0]");
 			for (int i = 1; i < numBoneWeights; i++) {
 				const char *weightAttr = boneWeightAttr[i];
 				// workaround for "cant do .x of scalar" issue
@@ -568,9 +498,9 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			// Uncomment this to screw up bone shaders to check the vertex shader software fallback
 			// WRITE(p, "THIS SHOULD ERROR! #error");
 			if (numBoneWeights == 1)
-				WRITE(p, "  mat4 skinMatrix = w1 * u_bone0");
+				WRITE(p, "  float4x4 skinMatrix = w1 * u_bone0");
 			else
-				WRITE(p, "  mat4 skinMatrix = w1.x * u_bone0");
+				WRITE(p, "  float4x4 skinMatrix = w1.x * u_bone0");
 			for (int i = 1; i < numBoneWeights; i++) {
 				const char *weightAttr = boneWeightAttr[i];
 				// workaround for "cant do .x of scalar" issue
@@ -585,24 +515,24 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			WRITE(p, ";\n");
 
 			// Trying to simplify this results in bugs in LBP...
-			WRITE(p, "  vec3 skinnedpos = (skinMatrix * vec4(position, 1.0)).xyz %s;\n", factor);
-			WRITE(p, "  vec3 worldpos = (u_world * vec4(skinnedpos, 1.0)).xyz;\n");
+			WRITE(p, "  float3 skinnedpos = mul(float4(position, 1.0), skinMatrix).xyz %s;\n", factor);
+			WRITE(p, "  float3 worldpos = mul(float4(skinnedpos, 1.0), u_world).xyz;\n");
 
 			if (hasNormal) {
-				WRITE(p, "  mediump vec3 skinnednormal = (skinMatrix * vec4(%snormal, 0.0)).xyz %s;\n", flipNormal ? "-" : "", factor);
+				WRITE(p, "  float3 skinnednormal = mul(float4(%snormal, 0.0), skinMatrix).xyz %s;\n", flipNormal ? "-" : "", factor);
 			} else {
-				WRITE(p, "  mediump vec3 skinnednormal = (skinMatrix * vec4(0.0, 0.0, %s1.0, 0.0)).xyz %s;\n", flipNormal ? "-" : "", factor);
+				WRITE(p, "  float3 skinnednormal = mul(float4(0.0, 0.0, %s1.0, 0.0), skinMatrix).xyz %s;\n", flipNormal ? "-" : "", factor);
 			}
-			WRITE(p, "  mediump vec3 worldnormal = normalize((u_world * vec4(skinnednormal, 0.0)).xyz);\n");
+			WRITE(p, "  float3 worldnormal = normalize(mul(float4(skinnednormal, 0.0), u_world).xyz);\n");
 		}
 
-		WRITE(p, "  vec4 viewPos = u_view * vec4(worldpos, 1.0);\n");
+		WRITE(p, "  float4 viewPos = mul(float4(worldpos, 1.0), u_view);\n");
 
 		// Final view and projection transforms.
 		if (gstate_c.Supports(GPU_ROUND_DEPTH_TO_16BIT)) {
-			WRITE(p, "  vec4 outPos = depthRoundZVP(u_proj * viewPos);\n");
+			WRITE(p, "  float4 outPos = depthRoundZVP(mul(viewPos, u_proj));\n");
 		} else {
-			WRITE(p, "  vec4 outPos = u_proj * viewPos;\n");
+			WRITE(p, "  float4 outPos = mul(viewPos, u_proj);\n");
 		}
 
 		// TODO: Declare variables for dots for shade mapping if needed.
@@ -622,7 +552,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 		bool distanceNeeded = false;
 		bool anySpots = false;
 		if (enableLighting) {
-			WRITE(p, "  lowp vec4 lightSum0 = u_ambient * %s + vec4(u_matemissive, 0.0);\n", ambientStr);
+			WRITE(p, "  float4 lightSum0 = u_ambient * %s + float4(u_matemissive, 0.0);\n", ambientStr);
 
 			for (int i = 0; i < 4; i++) {
 				GELightType type = static_cast<GELightType>(id.Bits(VS_BIT_LIGHT0_TYPE + 4*i, 2));
@@ -639,19 +569,19 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			}
 
 			if (!specularIsZero) {
-				WRITE(p, "  lowp vec3 lightSum1 = vec3(0.0);\n");
+				WRITE(p, "  float3 lightSum1 = float3(0.0);\n");
 			}
 			if (!diffuseIsZero) {
-				WRITE(p, "  vec3 toLight;\n");
-				WRITE(p, "  lowp vec3 diffuse;\n");
+				WRITE(p, "  float3 toLight;\n");
+				WRITE(p, "  float3 diffuse;\n");
 			}
 			if (distanceNeeded) {
 				WRITE(p, "  float distance;\n");
-				WRITE(p, "  lowp float lightScale;\n");
+				WRITE(p, "  float lightScale;\n");
 			}
-			WRITE(p, "  mediump float ldot;\n");
+			WRITE(p, "  float ldot;\n");
 			if (anySpots) {
-				WRITE(p, "  lowp float angle;\n");
+				WRITE(p, "  float angle;\n");
 			}
 		}
 
@@ -695,13 +625,13 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				timesLightScale = "";
 				break;
 			case GE_LIGHTTYPE_POINT:
-				WRITE(p, "  lightScale = clamp(1.0 / dot(u_lightatt%i, vec3(1.0, distance, distance*distance)), 0.0, 1.0);\n", i);
+				WRITE(p, "  lightScale = clamp(1.0 / dot(u_lightatt%i, float3(1.0, distance, distance*distance)), 0.0, 1.0);\n", i);
 				break;
 			case GE_LIGHTTYPE_SPOT:
 			case GE_LIGHTTYPE_UNKNOWN:
 				WRITE(p, "  angle = length(u_lightdir%i) == 0.0 ? 0.0 : dot(normalize(u_lightdir%i), toLight);\n", i, i);
 				WRITE(p, "  if (angle >= u_lightangle_spotCoef%i.x) {\n", i);
-				WRITE(p, "    lightScale = clamp(1.0 / dot(u_lightatt%i, vec3(1.0, distance, distance*distance)), 0.0, 1.0) * (u_lightangle_spotCoef%i.y <= 0.0 ? 1.0 : pow(angle, u_lightangle_spotCoef%i.y));\n", i, i, i);
+				WRITE(p, "    lightScale = clamp(1.0 / dot(u_lightatt%i, float3(1.0, distance, distance*distance)), 0.0, 1.0) * (u_lightangle_spotCoef%i.y <= 0.0 ? 1.0 : pow(angle, u_lightangle_spotCoef%i.y));\n", i, i, i);
 				WRITE(p, "  } else {\n");
 				WRITE(p, "    lightScale = 0.0;\n");
 				WRITE(p, "  }\n");
@@ -714,7 +644,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 			WRITE(p, "  diffuse = (u_lightdiffuse%i * %s) * max(ldot, 0.0);\n", i, diffuseStr);
 			if (doSpecular) {
 				WRITE(p, "  if (ldot >= 0.0) {\n");
-				WRITE(p, "    ldot = dot(normalize(toLight + vec3(0.0, 0.0, 1.0)), worldnormal);\n");
+				WRITE(p, "    ldot = dot(normalize(toLight + float3(0.0, 0.0, 1.0)), worldnormal);\n");
 				WRITE(p, "    if (u_matspecular.a <= 0.0) {\n");
 				WRITE(p, "      ldot = 1.0;\n");
 				WRITE(p, "    } else {\n");
@@ -733,7 +663,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				WRITE(p, "  v_color0 = clamp(lightSum0, 0.0, 1.0);\n");
 				// v_color1 only exists when lmode = 1.
 				if (specularIsZero) {
-					WRITE(p, "  v_color1 = vec3(0.0);\n");
+					WRITE(p, "  v_color1 = float3(0.0);\n");
 				} else {
 					WRITE(p, "  v_color1 = clamp(lightSum1, 0.0, 1.0);\n");
 				}
@@ -741,7 +671,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				if (specularIsZero) {
 					WRITE(p, "  v_color0 = clamp(lightSum0, 0.0, 1.0);\n");
 				} else {
-					WRITE(p, "  v_color0 = clamp(clamp(lightSum0, 0.0, 1.0) + vec4(lightSum1, 0.0), 0.0, 1.0);\n");
+					WRITE(p, "  v_color0 = clamp(clamp(lightSum0, 0.0, 1.0) + float4(lightSum1, 0.0), 0.0, 1.0);\n");
 				}
 			}
 		} else {
@@ -755,7 +685,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				WRITE(p, "  v_color0 = u_matambientalpha;\n");
 			}
 			if (lmode)
-				WRITE(p, "  v_color1 = vec3(0.0);\n");
+				WRITE(p, "  v_color1 = float3(0.0);\n");
 		}
 
 		// Step 3: UV generation
@@ -766,17 +696,17 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				if (scaleUV) {
 					if (hasTexcoord) {
 						if (doBezier || doSpline)
-							WRITE(p, "  v_texcoord = vec3(tess.tex * u_uvscaleoffset.xy + u_uvscaleoffset.zw, 0.0);\n");
+							WRITE(p, "  v_texcoord = float3(tess.tex.xy * u_uvscaleoffset.xy + u_uvscaleoffset.zw, 0.0);\n");
 						else
-							WRITE(p, "  v_texcoord = vec3(texcoord.xy * u_uvscaleoffset.xy, 0.0);\n");
+							WRITE(p, "  v_texcoord = float3(texcoord.xy * u_uvscaleoffset.xy, 0.0);\n");
 					} else {
-						WRITE(p, "  v_texcoord = vec3(0.0);\n");
+						WRITE(p, "  v_texcoord = float3(0.0);\n");
 					}
 				} else {
 					if (hasTexcoord) {
-						WRITE(p, "  v_texcoord = vec3(texcoord.xy * u_uvscaleoffset.xy + u_uvscaleoffset.zw, 0.0);\n");
+						WRITE(p, "  v_texcoord = float3(texcoord.xy * u_uvscaleoffset.xy + u_uvscaleoffset.zw, 0.0);\n");
 					} else {
-						WRITE(p, "  v_texcoord = vec3(u_uvscaleoffset.zw, 0.0);\n");
+						WRITE(p, "  v_texcoord = float3(u_uvscaleoffset.zw, 0.0);\n");
 					}
 				}
 				break;
@@ -786,33 +716,33 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 					std::string temp_tc;
 					switch (uvProjMode) {
 					case GE_PROJMAP_POSITION:  // Use model space XYZ as source
-						temp_tc = "vec4(position.xyz, 1.0)";
+						temp_tc = "float4(position.xyz, 1.0)";
 						break;
 					case GE_PROJMAP_UV:  // Use unscaled UV as source
 						{
 							// prescale is false here.
 							if (hasTexcoord) {
-								temp_tc = "vec4(texcoord.xy, 0.0, 1.0)";
+								temp_tc = "float4(texcoord.xy, 0.0, 1.0)";
 							} else {
-								temp_tc = "vec4(0.0, 0.0, 0.0, 1.0)";
+								temp_tc = "float4(0.0, 0.0, 0.0, 1.0)";
 							}
 						}
 						break;
 					case GE_PROJMAP_NORMALIZED_NORMAL:  // Use normalized transformed normal as source
 						if (hasNormal)
-							temp_tc = flipNormal ? "vec4(normalize(-normal), 1.0)" : "vec4(normalize(normal), 1.0)";
+							temp_tc = flipNormal ? "float4(normalize(-normal), 1.0)" : "float4(normalize(normal), 1.0)";
 						else
-							temp_tc = "vec4(0.0, 0.0, 1.0, 1.0)";
+							temp_tc = "float4(0.0, 0.0, 1.0, 1.0)";
 						break;
 					case GE_PROJMAP_NORMAL:  // Use non-normalized transformed normal as source
 						if (hasNormal)
-							temp_tc = flipNormal ? "vec4(-normal, 1.0)" : "vec4(normal, 1.0)";
+							temp_tc = flipNormal ? "float4(-normal, 1.0)" : "float4(normal, 1.0)";
 						else
-							temp_tc = "vec4(0.0, 0.0, 1.0, 1.0)";
+							temp_tc = "float4(0.0, 0.0, 1.0, 1.0)";
 						break;
 					}
 					// Transform by texture matrix. XYZ as we are doing projection mapping.
-					WRITE(p, "  v_texcoord = (u_texmtx * %s).xyz * vec3(u_uvscaleoffset.xy, 1.0);\n", temp_tc.c_str());
+					WRITE(p, "  v_texcoord = mul(%s, u_texmtx).xyz * float3(u_uvscaleoffset.xy, 1.0);\n", temp_tc.c_str());
 				}
 				break;
 
@@ -820,7 +750,7 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 				{
 					std::string lightFactor0 = StringFromFormat("(length(u_lightpos%i) == 0.0 ? worldnormal.z : dot(normalize(u_lightpos%i), worldnormal))", ls0, ls0);
 					std::string lightFactor1 = StringFromFormat("(length(u_lightpos%i) == 0.0 ? worldnormal.z : dot(normalize(u_lightpos%i), worldnormal))", ls1, ls1);
-					WRITE(p, "  v_texcoord = vec3(u_uvscaleoffset.xy * vec2(1.0 + %s, 1.0 + %s) * 0.5, 1.0);\n", lightFactor0.c_str(), lightFactor1.c_str());
+					WRITE(p, "  v_texcoord = float3(u_uvscaleoffset.xy * float2(1.0 + %s, 1.0 + %s) * 0.5, 1.0);\n", lightFactor0.c_str(), lightFactor1.c_str());
 				}
 				break;
 
@@ -836,13 +766,13 @@ void GenerateVertexShader(const VShaderID &id, char *buffer, uint32_t *attrMask,
 	}
 
 	if (!isModeThrough && gstate_c.Supports(GPU_SUPPORTS_VS_RANGE_CULLING)) {
-		WRITE(p, "  vec3 projPos = outPos.xyz / outPos.w;\n");
+		WRITE(p, "  float3 projPos = outPos.xyz / outPos.w;\n");
 		// Vertex range culling doesn't happen when depth is clamped, so only do this if in range.
 		WRITE(p, "  if (u_cullRangeMin.w <= 0.0 || (projPos.z >= u_cullRangeMin.z && projPos.z <= u_cullRangeMax.z)) {\n");
 		const char *outMin = "projPos.x < u_cullRangeMin.x || projPos.y < u_cullRangeMin.y || projPos.z < u_cullRangeMin.z";
 		const char *outMax = "projPos.x > u_cullRangeMax.x || projPos.y > u_cullRangeMax.y || projPos.z > u_cullRangeMax.z";
 		WRITE(p, "    if (%s || %s) {\n", outMin, outMax);
-		WRITE(p, "      outPos.xyzw = vec4(u_cullRangeMax.w);\n");
+		WRITE(p, "      outPos.xyzw = float4(u_cullRangeMax.w);\n");
 		WRITE(p, "    }\n");
 		WRITE(p, "  }\n");
 	}

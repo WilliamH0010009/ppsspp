@@ -17,8 +17,28 @@
 
 #pragma once
 
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(VITA)
 #include <sys/mman.h>
+#elif defined(VITA)
+#include <sys/types.h>
+
+#define PROT_NONE 0
+#define PROT_READ 1
+#define PROT_WRITE 2
+#define PROT_EXEC 4
+
+#define MAP_FILE 0
+#define MAP_SHARED 1
+#define MAP_PRIVATE 2
+#define MAP_TYPE 0xF
+#define MAP_FIXED 0x10
+#define MAP_ANONYMOUS 0x20
+#define MAP_ANON MAP_ANONYMOUS
+
+#define MAP_FAILED ((void *)-1)
+
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+int munmap(void *addr, size_t length);
 #endif
 #include <stdint.h>
 

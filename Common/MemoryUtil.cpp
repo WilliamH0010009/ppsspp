@@ -36,6 +36,10 @@
 #include <mach/vm_param.h>
 #endif
 
+#ifdef VITA
+#include <malloc.h>
+#endif
+
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -51,6 +55,55 @@ static SYSTEM_INFO sys_info;
 
 #define MEM_PAGE_MASK ((MEM_PAGE_SIZE)-1)
 #define ppsspp_round_page(x) ((((uintptr_t)(x)) + MEM_PAGE_MASK) & ~(MEM_PAGE_MASK))
+
+#include <kubridge.h>
+#define ALIGN(x, align) (((x) + ((align) - 1)) & ~((align) - 1))
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+	int blockid;
+	void *retval;
+	SceKernelAllocMemBlockKernelOpt opt;
+	memset(&opt, 0, sizeof(SceKernelAllocMemBlockKernelOpt));
+	opt.size = sizeof(SceKernelAllocMemBlockKernelOpt);
+	if (flags & MAP_FIXED) {
+		opt.attr = 0x1;
+		opt.field_C = (SceUInt32)addr;
+		blockid = kuKernelAllocMemBlock("mmap", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, ALIGN(length, 0x1000), &opt);
+	} else {
+		if (prot & PROT_EXEC) {
+			opt.attr = 0x2010000;
+			opt.field_30 = 2;
+			blockid = kuKernelAllocMemBlock("mmap", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, ALIGN(length, 0x100000), &opt);
+			sceKernelOpenVMDomain();
+		} else {
+			blockid = sceKernelAllocMemBlock("mmap", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, ALIGN(length, 0x1000), NULL);
+		}
+	}
+	if (blockid < 0) {
+		printf("Failed to allocate memory for %p %x %x %x\n", addr, length, prot, flags);
+		return MAP_FAILED;
+	}
+	sceKernelGetMemBlockBase(blockid, &retval);
+	return retval;
+}
+
+int munmap(void *addr, size_t length) {
+	int blockid = sceKernelFindMemBlockByAddr(addr, length);
+	if (blockid < 0) {
+		printf("Could not find memory %p with size %x to unmap.\n", addr, length);
+		return -1;
+	}
+	sceKernelFreeMemBlock(blockid);
+	return 0;
+}
+
+int mprotect(void *addr, size_t len, int prot) {
+	printf("mprotect %p %x %x\n", addr, len, prot);
+	return 0;
+}
+
+int getpagesize(void) {
+	return 0x1000;
+}
 
 #ifdef _WIN32
 // Win32 flags are odd...
@@ -235,7 +288,7 @@ void *AllocateAlignedMemory(size_t size, size_t alignment) {
 	void* ptr =  _aligned_malloc(size,alignment);
 #else
 	void* ptr = NULL;
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(VITA)
 	ptr = memalign(alignment, size);
 #else
 	if (posix_memalign(&ptr, alignment, size) != 0)
@@ -247,7 +300,7 @@ void *AllocateAlignedMemory(size_t size, size_t alignment) {
 	//	(unsigned long)size);
 
 	if (ptr == NULL)
-		PanicAlert("Failed to allocate aligned memory");
+		PanicAlert("Failed to allocate aligned memory for size %x and alignment %x", size, alignment);
 
 	return ptr;
 }

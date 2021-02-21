@@ -15,6 +15,7 @@
 // Official git repository and contact information can be found at
 // https://github.com/hrydgard/ppsspp and http://www.ppsspp.org/.
 
+#ifndef VITA
 #include "ppsspp_config.h"
 
 #include <memory>
@@ -359,3 +360,4 @@ bool TranslateShader(std::string *dest, ShaderLanguage destLang, TranslatedShade
 		return false;
 	}
 }
+#endif

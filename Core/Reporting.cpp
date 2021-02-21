@@ -594,7 +594,7 @@ namespace Reporting
 			return;
 
 		const int MESSAGE_BUFFER_SIZE = 65536;
-		char temp[MESSAGE_BUFFER_SIZE];
+		static char temp[MESSAGE_BUFFER_SIZE];
 
 		va_list args;
 		va_start(args, message);

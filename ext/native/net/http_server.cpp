@@ -195,7 +195,7 @@ bool Server::Listen4(int port) {
 }
 
 bool Server::Listen6(int port, bool ipv6_only) {
-#if !PPSSPP_PLATFORM(SWITCH)
+#if !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 	listener_ = socket(AF_INET6, SOCK_STREAM, 0);
 	if (listener_ < 0)
 		return false;
@@ -257,7 +257,7 @@ bool Server::RunSlice(double timeout) {
 	union {
 		struct sockaddr sa;
 		struct sockaddr_in ipv4;
-#if !PPSSPP_PLATFORM(SWITCH)
+#if !PPSSPP_PLATFORM(SWITCH) && !PPSSPP_PLATFORM(VITA)
 		struct sockaddr_in6 ipv6;
 #endif
 	} client_addr;

@@ -1458,7 +1458,7 @@ int getPTPSocketCount(void) {
 int initNetwork(SceNetAdhocctlAdhocId *adhoc_id){
 	int iResult = 0;
 	metasocket = (int)INVALID_SOCKET;
-	metasocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	metasocket = socket(AF_INET, SOCK_STREAM, 6);
 	if (metasocket == INVALID_SOCKET){
 		ERROR_LOG(SCENET, "Invalid socket");
 		return -1;

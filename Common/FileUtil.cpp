@@ -77,6 +77,32 @@
 #define DIR_SEP_CHRS "/"
 #endif
 
+#ifdef VITA
+#include <psp2/io/dirent.h>
+
+char *realpath(const char *path, char *resolved_path)
+{
+	strcpy(resolved_path, path);
+	return resolved_path;
+}
+
+int mkdir(const char *pathname, mode_t mode) {
+	return sceIoMkdir(pathname, 0777) < 0 ? -1 : 0;
+}
+
+int rmdir(const char *pathname) {
+	return sceIoRmdir(pathname) < 0 ? -1 : 0;
+}
+
+mode_t umask(mode_t mask) {
+	return 0;
+}
+
+int chmod(const char *pathname, mode_t mode) {
+	return 0;
+}
+#endif
+
 // This namespace has various generic functions related to files and paths.
 // The code still needs a ton of cleanup.
 // REMEMBER: strdup considered harmful!

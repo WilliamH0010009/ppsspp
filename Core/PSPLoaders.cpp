@@ -57,6 +57,10 @@
 #include "Core/HLE/sceKernelModule.h"
 #include "Core/HLE/sceKernelMemory.h"
 
+#if PPSSPP_PLATFORM(VITA)
+#define PATH_MAX 4096
+#endif
+
 static std::thread loadingThread;
 
 static void UseLargeMem(int memsize) {

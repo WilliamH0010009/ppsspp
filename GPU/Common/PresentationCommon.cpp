@@ -445,13 +445,13 @@ void PresentationCommon::DestroyPostShader() {
 Draw::ShaderModule *PresentationCommon::CompileShaderModule(Draw::ShaderStage stage, ShaderLanguage lang, const std::string &src, std::string *errorString) {
 	std::string translated = src;
 	bool translationFailed = false;
-	if (lang != lang_) {
-		// Gonna have to upconvert the shader.
-		if (!TranslateShader(&translated, lang_, nullptr, src, lang, stage, errorString)) {
-			ERROR_LOG(FRAMEBUF, "Failed to translate post-shader: %s", errorString->c_str());
-			return nullptr;
-		}
-	}
+	// if (lang != lang_) {
+		// // Gonna have to upconvert the shader.
+		// if (!TranslateShader(&translated, lang_, nullptr, src, lang, stage, errorString)) {
+			// ERROR_LOG(FRAMEBUF, "Failed to translate post-shader: %s", errorString->c_str());
+			// return nullptr;
+		// }
+	// }
 
 	Draw::ShaderLanguage mappedLang;
 	// These aren't exact, unfortunately, but we just need the type Draw will accept.
