@@ -70,7 +70,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset)
 		blockid = kuKernelAllocMemBlock("mmap", SCE_KERNEL_MEMBLOCK_TYPE_USER_RW, ALIGN(length, 0x1000), &opt);
 	} else {
 		if (prot & PROT_EXEC) {
-			opt.attr = 0x2010000;
+			opt.attr = 0x10000;
 			opt.field_30 = 2;
 			blockid = kuKernelAllocMemBlock("mmap", SCE_KERNEL_MEMBLOCK_TYPE_USER_RX, ALIGN(length, 0x100000), &opt);
 			sceKernelOpenVMDomain();
