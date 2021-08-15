@@ -5,16 +5,22 @@
 static const std::vector<Draw::ShaderSource> fsDiscard = {
 	{Draw::ShaderLanguage::GLSL_ES_200,
 	R"(
-	float4 main(
-	  float4 oColor0 : COLOR0,
-		float2 oTexCoord0 : TEXCOORD0,
-		uniform sampler2D Sampler0
-	) {
-		float4 color = tex2D(Sampler0, oTexCoord0) * oColor0;
+	#ifdef GL_ES
+	precision lowp float;
+	#endif
+	#if __VERSION__ >= 130
+	#define varying in
+	#define gl_FragColor fragColor0
+	out vec4 fragColor0;
+	#endif
+	varying vec4 oColor0;
+	varying vec2 oTexCoord0;
+	uniform sampler2D Sampler0;
+	void main() {
+		vec4 color = texture2D(Sampler0, oTexCoord0) * oColor0;
 		if (color.a <= 0.0)
 			discard;
-		float4 gl_FragColor = color;
-		return gl_FragColor;
+		gl_FragColor = color;
 	})"
 	},
 	{Draw::ShaderLanguage::GLSL_VULKAN,

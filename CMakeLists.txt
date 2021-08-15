@@ -170,7 +170,7 @@ if(VITA)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -fno-exceptions -std=gnu++11")
 	add_compile_options(-Wl,-q -O2 -ftree-vectorize -fno-short-enums -D_NDEBUG)
 	add_compile_options(-mtune=cortex-a9 -march=armv7-a -mfpu=neon -mfloat-abi=hard)
-	add_definitions(-DVITA -D__VITA__)
+	add_definitions(-DVITA -D__VITA__ -D__psp2__)
 	add_definitions(-D_PSP2_NET_NET_H_)
 	set(USING_EGL ON)
 	set(USING_GLES2 ON)
@@ -2030,13 +2030,13 @@ endif()
 
 if(VITA)
 	set(VitaLibs
-		mp3lame
-		pib
+		libgpu_es4_ext_stub_weak
+		libGLESv2_stub_weak
+		libIMGEGL_stub_weak
 		vita2d
+		mp3lame
 		taihen_stub
 		kubridge_stub
-		libScePiglet_stub
-		SceShaccCg_stub
 		SceAppMgr_stub
 		SceDisplay_stub
 		SceCommonDialog_stub

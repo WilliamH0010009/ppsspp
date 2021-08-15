@@ -20,9 +20,9 @@ class GLRenderManager;
 static EGLDisplay               g_eglDisplay    = EGL_NO_DISPLAY;
 static EGLContext               g_eglContext    = nullptr;
 static EGLSurface               g_eglSurface    = nullptr;
-static EGLNativeDisplayType     g_Display       = nullptr;
+static EGLNativeDisplayType     g_Display       = (EGLNativeDisplayType)nullptr;
 static bool                     g_XDisplayOpen  = false;
-static EGLNativeWindowType      g_Window        = (EGLNativeWindowType)0;
+static EGLNativeWindowType      g_Window        = (EGLNativeWindowType)nullptr;
 static bool useEGLSwap = false;
 
 int CheckEGLErrors(const char *file, int line) {
@@ -74,8 +74,8 @@ static bool EGL_OpenInit() {
 
 static int8_t EGL_Open(SDL_Window *window) {
 #if defined(USING_FBDEV) || defined(VITA)
-	g_Display = (EGLNativeDisplayType)0;
-	g_Window = (EGLNativeWindowType)VITA_WINDOW_960X544;
+	g_Display = (EGLNativeDisplayType)nullptr;
+	g_Window = (EGLNativeWindowType)nullptr;
 #elif defined(__APPLE__)
 	g_Display = (EGLNativeDisplayType)XOpenDisplay(nullptr);
 	g_XDisplayOpen = g_Display != nullptr;
@@ -281,13 +281,13 @@ void EGL_Close() {
 		eglTerminate(g_eglDisplay);
 		g_eglDisplay = EGL_NO_DISPLAY;
 	}
-	if (g_Display != nullptr) {
+	if (g_Display != (EGLNativeDisplayType)nullptr) {
 #if !defined(USING_FBDEV) && !defined(VITA)
 		if (g_XDisplayOpen)
 			XCloseDisplay((Display *)g_Display);
 #endif
 		g_XDisplayOpen = false;
-		g_Display = nullptr;
+		g_Display = (EGLNativeDisplayType)nullptr;
 	}
 	g_eglSurface = NULL;
 	g_eglContext = NULL;

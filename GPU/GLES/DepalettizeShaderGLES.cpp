@@ -26,12 +26,13 @@
 #include "GPU/Common/DepalettizeShaderCommon.h"
 
 static const char *depalVShader100 = R"(
-void main(
-	float4 a_position,
-	float2 a_texcoord0,
-	float4 out gl_Position : POSITION,
-	float2 out v_texcoord0 : TEXCOORD0
-) {
+#ifdef GL_ES
+precision highp float;
+#endif
+attribute vec4 a_position;
+attribute vec2 a_texcoord0;
+varying vec2 v_texcoord0;
+void main() {
   v_texcoord0 = a_texcoord0;
   gl_Position = a_position;
 }
@@ -74,16 +75,12 @@ void DepalShaderCacheGLES::DeviceRestore(Draw::DrawContext *draw) {
 bool DepalShaderCacheGLES::CreateVertexShader() {
 	std::string src(useGL3_ ? depalVShader300 : depalVShader100);
 	std::string prelude;
-#ifdef VITA
-	prelude = "";
-#else
 	if (gl_extensions.IsGLES) {
 		prelude = useGL3_ ? "#version 300 es\n" : "#version 100\n";
 	} else {
 		// We need to add a corresponding #version.  Apple drivers fail without an exact match.
 		prelude = StringFromFormat("#version %d\n", gl_extensions.GLSLVersion());
 	}
-#endif
 	vertexShader_ = render_->CreateShader(GL_VERTEX_SHADER, prelude + src, "depal");
 	return true;
 }

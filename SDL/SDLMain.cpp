@@ -6,61 +6,25 @@
 #include <pwd.h>
 
 #ifdef VITA
-#include <psp2/appmgr.h>
+extern "C" {
 #include <psp2/io/dirent.h>
 #include <psp2/io/fcntl.h>
 #include <psp2/io/stat.h>
+#include <psp2/kernel/modulemgr.h>
+#include <psp2/appmgr.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <pib.h>
+#include <gpu_es4/psp2_pvr_hint.h>
 
 #define PATH_MAX 4096
 
-int sceLibcHeapSize = 4 * 1024 * 1024;
+int sceLibcHeapSize = 64 * 1024 * 1024;
 
 // 256mb is too much
-int _newlib_heap_size_user = 192 * 1024 * 1024;
-/*
-int printf(const char *format, ...) {
-	va_list list;
-	static char string[4096];
-	va_start(list, format);
-	vsnprintf(string, sizeof(string), format, list);
-	va_end(list);
-	SceUID fd = sceIoOpen("ux0:data/ppsspp.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
-	if (fd >= 0) {
-		sceIoWrite(fd, string, strlen(string));
-		sceIoClose(fd);
-	}
-	return 0;
+int _newlib_heap_size_user = 64 * 1024 * 1024;
 }
-
-int puts(const char *s) {
-	SceUID fd = sceIoOpen("ux0:data/ppsspp.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
-	if (fd >= 0) {
-		sceIoWrite(fd, s, strlen(s));
-		sceIoClose(fd);
-	}
-	return 0;
-}
-
-int fprintf(FILE *stream, const char *format, ...) {
-	va_list list;
-	static char string[4096];
-	va_start(list, format);
-	vsnprintf(string, sizeof(string), format, list);
-	va_end(list);
-	SceUID fd = sceIoOpen("ux0:data/ppsspp.txt", SCE_O_WRONLY | SCE_O_CREAT | SCE_O_APPEND, 0777);
-	if (fd >= 0) {
-		sceIoWrite(fd, string, strlen(string));
-		sceIoClose(fd);
-	}
-	return 0;
-}
-*/
 #endif
 
 #include "ppsspp_config.h"
@@ -519,7 +483,16 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef VITA
-	pibInit(PIB_SHACCCG);
+	sceKernelLoadStartModule("vs0:sys/external/libfios2.suprx", 0, NULL, 0, NULL, 0);
+	sceKernelLoadStartModule("vs0:sys/external/libc.suprx", 0, NULL, 0, NULL, 0);
+
+	sceKernelLoadStartModule("app0:libgpu_es4_ext.suprx", 0, NULL, 0, NULL, 0);
+	sceKernelLoadStartModule("app0:libIMGEGL.suprx", 0, NULL, 0, NULL, 0);
+
+	PVRSRV_PSP2_APPHINT hint;
+	PVRSRVInitializeAppHint(&hint);
+	hint.ui32SwTexOpMaxUltNum = 128;
+	PVRSRVCreateVirtualAppHint(&hint);
 #endif
 
 #ifdef HAVE_LIBNX
